@@ -1,0 +1,40 @@
+name: Nightly sync app folder from abap2UI5
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+
+      - name: Checkout abap2UI5 source
+        uses: actions/checkout@v4
+        with:
+          repository: abap2UI5/abap2UI5
+          path: abap2UI5-source
+
+      - name: Sync app folder
+        run: |
+          rm -rf app
+          mkdir -p app
+          cp -a abap2UI5-source/app/. app/
+          rm -rf abap2UI5-source
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain app)" ]; then
+            git add app
+            git commit -m "chore: nightly sync app folder from abap2UI5"
+            git push
+          else
+            echo "No changes to commit"
+          fi

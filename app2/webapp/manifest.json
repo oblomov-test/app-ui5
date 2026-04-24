@@ -3,13 +3,16 @@
 	"sap.app": {
 		"id": "app2",
 		"type": "application",
-		"i18n": "i18n/i18n.properties",
+		"i18n": {
+			"bundleUrl": "i18n/i18n.properties",
+			"supportedLocales": [""],
+			"fallbackLocale": ""
+		},
 		"title": "{{appTitle}}",
 		"description": "{{appDescription}}",
 		"applicationVersion": {
 			"version": "0.0.1"
-		},
-		"dataSources": {}
+		}
 	},
 	"sap.ui": {
 		"technology": "UI5",
@@ -19,11 +22,15 @@
 			"phone": true
 		}
 	},
+	"sap.fiori": {
+		"registrationIds": [],
+		"archeType": "transactional"
+	},
 	"sap.ui5": {
+		"handleValidation": true,
 		"rootView": {
 			"viewName": "app2.view.App",
 			"type": "XML",
-			"async": true,
 			"id": "app"
 		},
 		"dependencies": {
@@ -48,12 +55,6 @@
 					"supportedLocales": [""],
 					"fallbackLocale": ""
 				}
-			},
-			"": {
-				"type": "sap.ui.model.json.JSONModel",
-				"settings": {},
-				"uri": "model/data.json",
-				"preload": true
 			}
 		},
 		"routing": {
@@ -63,8 +64,7 @@
 				"viewType": "XML",
 				"path": "app2.view",
 				"controlId": "app",
-				"controlAggregation": "pages",
-				"async": true
+				"controlAggregation": "pages"
 			},
 			"routes": [
 				{

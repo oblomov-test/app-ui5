@@ -5,6 +5,6 @@
   "description": "Mirror of the app/ folder from the abap2UI5 project.",
   "license": "MIT",
   "scripts": {
-    "sync": "./scripts/sync-app.sh"
+    "clone": "./scripts/sync-app.sh"
   }
 }

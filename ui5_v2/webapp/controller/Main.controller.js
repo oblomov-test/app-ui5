@@ -4,7 +4,7 @@ sap.ui.define([
 ], (Controller, MessageToast) => {
 	"use strict";
 
-	return Controller.extend("app2.controller.Main", {
+	return Controller.extend("ui5_v2.controller.Main", {
 		onInit() {
 		},
 

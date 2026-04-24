@@ -4,8 +4,8 @@ sap.ui.define([
 	"use strict";
 
 	new ComponentContainer({
-		id: "app2Container",
-		name: "app2",
+		id: "ui5_v2Container",
+		name: "ui5_v2",
 		async: true,
 		manifest: true,
 		height: "100%",

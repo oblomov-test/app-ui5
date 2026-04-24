@@ -1,12 +1,14 @@
 {
-  "name": "app2",
+  "name": "ui5_v2",
   "version": "0.0.1",
   "description": "Modern UI5 2.x application (legacy-free)",
   "private": true,
   "scripts": {
     "start": "ui5 serve --open index.html",
     "build": "ui5 build --clean-dest",
-    "lint": "eslint webapp"
+    "lint": "npm run lint:eslint && npm run lint:ui5",
+    "lint:eslint": "eslint webapp",
+    "lint:ui5": "ui5lint"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

@@ -1,15 +1,18 @@
 {
 	"_version": "1.65.0",
 	"sap.app": {
-		"id": "app2",
+		"id": "ui5_v2",
 		"type": "application",
-		"i18n": "i18n/i18n.properties",
+		"i18n": {
+			"bundleUrl": "i18n/i18n.properties",
+			"supportedLocales": [""],
+			"fallbackLocale": ""
+		},
 		"title": "{{appTitle}}",
 		"description": "{{appDescription}}",
 		"applicationVersion": {
 			"version": "0.0.1"
-		},
-		"dataSources": {}
+		}
 	},
 	"sap.ui": {
 		"technology": "UI5",
@@ -19,11 +22,15 @@
 			"phone": true
 		}
 	},
+	"sap.fiori": {
+		"registrationIds": [],
+		"archeType": "transactional"
+	},
 	"sap.ui5": {
+		"handleValidation": true,
 		"rootView": {
-			"viewName": "app2.view.App",
+			"viewName": "ui5_v2.view.App",
 			"type": "XML",
-			"async": true,
 			"id": "app"
 		},
 		"dependencies": {
@@ -44,16 +51,10 @@
 			"i18n": {
 				"type": "sap.ui.model.resource.ResourceModel",
 				"settings": {
-					"bundleName": "app2.i18n.i18n",
+					"bundleName": "ui5_v2.i18n.i18n",
 					"supportedLocales": [""],
 					"fallbackLocale": ""
 				}
-			},
-			"": {
-				"type": "sap.ui.model.json.JSONModel",
-				"settings": {},
-				"uri": "model/data.json",
-				"preload": true
 			}
 		},
 		"routing": {
@@ -61,10 +62,9 @@
 				"routerClass": "sap.m.routing.Router",
 				"type": "View",
 				"viewType": "XML",
-				"path": "app2.view",
+				"path": "ui5_v2.view",
 				"controlId": "app",
-				"controlAggregation": "pages",
-				"async": true
+				"controlAggregation": "pages"
 			},
 			"routes": [
 				{

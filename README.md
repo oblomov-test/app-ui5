@@ -7,7 +7,7 @@ Mirror of the `app/` folder from the [abap2UI5](https://github.com/abap2UI5/abap
 Run the sync script from the repo root:
 
 ```bash
-./scripts/sync-app.sh
+npm run sync
 ```
 
 This clones `abap2UI5/abap2UI5`, replaces the local `app/` folder with its contents, and leaves any changes unstaged for you to review and commit.
@@ -17,5 +17,5 @@ This clones `abap2UI5/abap2UI5`, replaces the local `app/` folder with its conte
 ```bash
 SOURCE_REPO=https://github.com/abap2UI5/abap2UI5.git \
 SOURCE_BRANCH=main \
-./scripts/sync-app.sh
+npm run sync
 ```

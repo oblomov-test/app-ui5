@@ -1,10 +1,9 @@
-/* global z2ui5 */
 sap.ui.define(
-	["sap/ui/core/Control", "sap/ui/core/Fragment", "sap/ui/model/json/JSONModel"],
-	(Control, Fragment, JSONModel) => {
+	["sap/ui/core/Control", "sap/ui/core/Fragment", "sap/ui/model/json/JSONModel", "z2ui5/Runtime"],
+	(Control, Fragment, JSONModel, z2ui5) => {
 		"use strict";
 
-		const toJson = (val) => JSON.stringify(val ?? null, null, 3);
+		const toJson = (val) => z2ui5.safeStringify(val, 3);
 
 		const PRETTIFY_XSL = `<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:strip-space elements="*" />
@@ -31,7 +30,7 @@ sap.ui.define(
 			return _xsltProcessor;
 		};
 
-		return Control.extend("app_v2.cc.DebugTool", {
+		return Control.extend("z2ui5.DebugTool", {
 			prettifyXml(sourceXml) {
 				if (!sourceXml) return "";
 				try {
@@ -152,7 +151,7 @@ sap.ui.define(
 				try {
 					if (!this.oDialog) {
 						this.oDialog = await Fragment.load({
-							name: "app_v2.cc.DebugTool",
+							name: "z2ui5.DebugTool",
 							controller: this,
 						});
 					}
@@ -182,7 +181,7 @@ sap.ui.define(
 					oDialog.setModel(oModel);
 					oDialog.open();
 				} catch (e) {
-					(z2ui5.errors ??= []).push({ message: `DebugTool.show failed`, error: e, ts: new Date().toISOString() });
+					z2ui5.logError(`DebugTool.show failed`, e);
 				} finally {
 					this._showPending = false;
 				}

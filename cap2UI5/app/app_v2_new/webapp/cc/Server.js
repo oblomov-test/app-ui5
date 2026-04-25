@@ -1,9 +1,36 @@
-/* global z2ui5 */
-sap.ui.define(["sap/ui/core/BusyIndicator", "sap/m/MessageBox"], (BusyIndicator, MessageBox) => {
+sap.ui.define(
+	[
+		"sap/ui/core/BusyIndicator",
+		"sap/m/MessageBox",
+		"z2ui5/Runtime",
+		"z2ui5/BackendAdapter",
+		"z2ui5/CustomJsParser",
+		"z2ui5/Helpers",
+	],
+	(BusyIndicator, MessageBox, z2ui5, Adapter, CustomJsParser, Helpers) => {
 	"use strict";
 
 	const ERROR_MAX_LENGTH = 50000;
-	const _MSG_TYPES = ["S_MSG_TOAST", "S_MSG_BOX"];
+	const RETRY_DELAYS_MS = [250, 500, 1000];
+
+	const { sleep, escapeHtml } = Helpers;
+
+	let csrfToken = null;
+
+	// Lazy: only fetch when the backend signals it's required (typical SAP Gateway).
+	// Backends without CSRF (e.g., CAP REST) never trigger this.
+	const fetchCsrfToken = async () => {
+		try {
+			const resp = await fetch(z2ui5.oConfig.pathname, {
+				method: "HEAD",
+				headers: { "X-CSRF-Token": "Fetch" },
+			});
+			const t = resp.headers.get("X-CSRF-Token");
+			csrfToken = t && t.toLowerCase() !== "required" ? t : null;
+		} catch {
+			csrfToken = null;
+		}
+	};
 
 	return {
 		endSession() {
@@ -21,14 +48,14 @@ sap.ui.define(["sap/ui/core/BusyIndicator", "sap/m/MessageBox"], (BusyIndicator,
 			}
 		},
 		Roundtrip() {
-			z2ui5.checkTimerActive = z2ui5.checkNestAfter = z2ui5.checkNestAfter2 = false;
+			z2ui5.checkNestAfter = z2ui5.checkNestAfter2 = false;
 			const oBody = (z2ui5.oBody ??= {});
 			oBody.S_FRONT = {
 				ID: oBody.ID,
 				CONFIG: z2ui5.oConfig,
 				ORIGIN: window.location.origin,
 				PATHNAME: window.location.pathname,
-				SEARCH: z2ui5.search || window.location.search,
+				SEARCH: window.location.search,
 				VIEW: oBody.VIEWNAME,
 				EVENT: oBody.ARGUMENTS?.[0]?.[0],
 				HASH: window.location.hash,
@@ -47,20 +74,46 @@ sap.ui.define(["sap/ui/core/BusyIndicator", "sap/m/MessageBox"], (BusyIndicator,
 		},
 
 		async readHttp() {
+			const body = z2ui5.safeStringify({ value: z2ui5.oBody }, 0);
+
+			const doPost = () => {
+				const headers = {
+					"Content-Type": "application/json",
+					"sap-contextid-accept": "header",
+					"sap-contextid": z2ui5.contextId ?? "",
+				};
+				if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+				return fetch(z2ui5.oConfig.pathname, { method: "POST", headers, body });
+			};
+
+			// Transient errors (network failures, 5xx) get exponential-backoff retries.
+			// Client errors (4xx) and CSRF challenges (handled below) bail out immediately.
 			let response;
-			try {
-				response = await fetch(z2ui5.oConfig.pathname, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						"sap-contextid-accept": "header",
-						"sap-contextid": z2ui5.contextId ?? "",
-					},
-					body: JSON.stringify({ value: z2ui5.oBody }),
-				});
-			} catch (e) {
-				this.responseError(`Network error: ${e.message}`);
+			let lastNetworkError;
+			for (let attempt = 0; ; attempt++) {
+				try {
+					response = await doPost();
+					lastNetworkError = null;
+					if (response.status < 500) break;
+				} catch (e) {
+					lastNetworkError = e;
+				}
+				if (attempt >= RETRY_DELAYS_MS.length) break;
+				await sleep(RETRY_DELAYS_MS[attempt]);
+			}
+			if (lastNetworkError) {
+				this.responseError(`Network error: ${lastNetworkError.message}`);
 				return;
+			}
+			// Retry once on CSRF expiry
+			if (response.status === 403 && (response.headers.get("X-CSRF-Token") ?? "").toLowerCase() === "required") {
+				await fetchCsrfToken();
+				try {
+					response = await doPost();
+				} catch (e) {
+					this.responseError(`Network error: ${e.message}`);
+					return;
+				}
 			}
 			z2ui5.contextId = response.headers.get("sap-contextid");
 			if (!response.ok) {
@@ -85,7 +138,7 @@ sap.ui.define(["sap/ui/core/BusyIndicator", "sap/m/MessageBox"], (BusyIndicator,
 				return;
 			}
 			z2ui5.responseData = responseData;
-			z2ui5.xxChangedPaths = new Set();
+			z2ui5.xxChanges = new Map();
 			const {
 				S_FRONT: { ID, PARAMS },
 				MODEL,
@@ -96,52 +149,47 @@ sap.ui.define(["sap/ui/core/BusyIndicator", "sap/m/MessageBox"], (BusyIndicator,
 			const { oController } = z2ui5;
 			try {
 				z2ui5.oResponse = response;
-				const params = response.PARAMS;
-				const sView = params?.S_VIEW;
+				const sView = Adapter.view(response);
 				if (sView?.CHECK_DESTROY) oController.ViewDestroy();
-				const customJs = params?.S_FOLLOW_UP_ACTION?.CUSTOM_JS;
+				const customJs = Adapter.customJs(response);
 				if (customJs) {
 					queueMicrotask(() => {
 						if (oController.isDestroyed?.()) return;
 						for (const item of customJs) {
 							try {
-								const mParams = item.split("'");
-								const mParamsEF = mParams.filter((_, index) => index % 2);
-								if (mParamsEF.length) oController.eF(...mParamsEF);
-								else Function("return " + mParams[0])();
+								const callArgs = CustomJsParser.parse(item);
+								if (callArgs) {
+									oController.eF(...callArgs);
+								} else {
+									z2ui5.logError(`customJs: rejected non-conforming payload`, item);
+								}
 							} catch (e) {
-								(z2ui5.errors ??= []).push({
-									message: `customJs: execution failed`,
-									error: e,
-									ts: new Date().toISOString(),
-								});
+								z2ui5.logError(`customJs: execution failed`, e);
 							}
 						}
 					});
 				}
-				for (const t of _MSG_TYPES) oController.showMessage(t, params);
+				oController.showMessage(response);
 				if (sView?.XML) {
 					oController.ViewDestroy();
 					await oController.displayView(sView.XML, response.OVIEWMODEL);
 					return;
 				}
-				for (const [key, view] of [
-					["S_VIEW", z2ui5.oView],
-					["S_VIEW_NEST", z2ui5.oViewNest],
-					["S_VIEW_NEST2", z2ui5.oViewNest2],
-					["S_POPUP", z2ui5.oViewPopup],
-					["S_POPOVER", z2ui5.oViewPopover],
-				])
-					oController.updateModelIfRequired(key, view);
+				const viewByParam = {
+					[Adapter.PARAM.VIEW]: z2ui5.oView,
+					[Adapter.PARAM.NEST]: z2ui5.oViewNest,
+					[Adapter.PARAM.NEST2]: z2ui5.oViewNest2,
+					[Adapter.PARAM.POPUP]: z2ui5.oViewPopup,
+					[Adapter.PARAM.POPOVER]: z2ui5.oViewPopover,
+				};
+				for (const param of Adapter.ALL_VIEW_PARAMS) {
+					oController.updateModelIfRequired(param, viewByParam[param]);
+				}
 				oController._processAfterRendering();
 			} catch (e) {
 				BusyIndicator.hide();
 				z2ui5.isBusy = false;
-				(z2ui5.errors ??= []).push({
-					message: `responseSuccess: unexpected error`,
-					error: e,
-					ts: new Date().toISOString(),
-				});
+				z2ui5.logError(`responseSuccess: unexpected error`, e);
 				const msg = e.message ?? "";
 				if (msg.includes("openui5") && msg.includes("script load error")) {
 					oController.checkSDKcompatibility(e);
@@ -227,17 +275,14 @@ sap.ui.define(["sap/ui/core/BusyIndicator", "sap/m/MessageBox"], (BusyIndicator,
 
 			const iframe = Object.assign(document.createElement("iframe"), { id: "errorIframe" });
 			iframe.style.cssText = "width: 100%; height: 100%; border: none; flex: 1;";
-			iframe.setAttribute("sandbox", "allow-same-origin");
+			iframe.setAttribute("sandbox", "");
+			iframe.srcdoc =
+				`<!DOCTYPE html><html><body style="margin:0;padding:0;">` +
+				`<pre style="margin:0;padding:8px;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;">` +
+				escapeHtml(errorMessage) +
+				`</pre></body></html>`;
 			errorContainer.appendChild(iframe);
-
-			const { contentDocument } = iframe;
-			if (contentDocument) {
-				const pre = contentDocument.createElement("pre");
-				pre.style.cssText =
-					"margin:0;padding:8px;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;";
-				pre.textContent = errorMessage;
-				(contentDocument.body || contentDocument.documentElement).appendChild(pre);
-			}
 		},
 	};
-});
+	},
+);

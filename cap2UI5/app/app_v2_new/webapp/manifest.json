@@ -3,13 +3,8 @@
 	"sap.app": {
 		"id": "app_v2",
 		"type": "application",
-		"i18n": {
-			"bundleUrl": "i18n/i18n.properties",
-			"supportedLocales": [""],
-			"fallbackLocale": ""
-		},
-		"title": "{{appTitle}}",
-		"description": "{{appDescription}}",
+		"title": "",
+		"description": "",
 		"applicationVersion": {
 			"version": "0.0.1"
 		},
@@ -66,16 +61,6 @@
 				"sap.ui.unified": {}
 			}
 		},
-		"models": {
-			"i18n": {
-				"type": "sap.ui.model.resource.ResourceModel",
-				"settings": {
-					"bundleName": "app_v2.i18n.i18n",
-					"supportedLocales": [""],
-					"fallbackLocale": ""
-				}
-			}
-		},
 		"services": {
 			"ShellUIService": {
 				"factoryName": "sap.ushell.ui5service.ShellUIService",
@@ -88,45 +73,6 @@
 					"uri": "css/style.css"
 				}
 			]
-		},
-		"routing": {
-			"config": {
-				"routerClass": "sap.m.routing.Router",
-				"type": "View",
-				"viewType": "XML",
-				"path": "app_v2.view",
-				"controlId": "app",
-				"controlAggregation": "pages",
-				"clearControlAggregation": false
-			},
-			"routes": [
-				{
-					"name": "RouteView1",
-					"pattern": ":?query:",
-					"target": ["TargetView1"]
-				},
-				{
-					"name": "RouteView2",
-					"pattern": ":?query:",
-					"target": ["TargetView2"]
-				}
-			],
-			"targets": {
-				"TargetView1": {
-					"id": "View1",
-					"name": "View1",
-					"viewType": "XML",
-					"transition": "flip",
-					"clearControlAggregation": false
-				},
-				"TargetView2": {
-					"id": "View2",
-					"name": "View2",
-					"viewType": "XML",
-					"transition": "flip",
-					"clearControlAggregation": false
-				}
-			}
 		},
 		"contentDensities": {
 			"compact": true,

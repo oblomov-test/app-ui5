@@ -1,4 +1,4 @@
-name: Lint ui5_v2
+name: Lint app_v2
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ui5_v2
+        working-directory: app_v2
     steps:
       - name: Checkout
         uses: actions/checkout@v4

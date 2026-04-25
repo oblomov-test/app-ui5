@@ -1,7 +1,7 @@
 {
 	"_version": "2.0.0",
 	"sap.app": {
-		"id": "ui5_v2",
+		"id": "app_v2",
 		"type": "application",
 		"i18n": {
 			"bundleUrl": "i18n/i18n.properties",
@@ -29,7 +29,7 @@
 	"sap.ui5": {
 		"handleValidation": true,
 		"rootView": {
-			"viewName": "ui5_v2.view.App",
+			"viewName": "app_v2.view.App",
 			"type": "XML",
 			"id": "app"
 		},
@@ -51,7 +51,7 @@
 			"i18n": {
 				"type": "sap.ui.model.resource.ResourceModel",
 				"settings": {
-					"bundleName": "ui5_v2.i18n.i18n",
+					"bundleName": "app_v2.i18n.i18n",
 					"supportedLocales": [""],
 					"fallbackLocale": ""
 				}
@@ -62,7 +62,7 @@
 				"routerClass": "sap.m.routing.Router",
 				"type": "View",
 				"viewType": "XML",
-				"path": "ui5_v2.view",
+				"path": "app_v2.view",
 				"controlId": "app",
 				"controlAggregation": "pages"
 			},

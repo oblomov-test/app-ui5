@@ -4,7 +4,7 @@ metadata:
 type: application
 framework:
   name: OpenUI5
-  version: "1.147.1"
+  version: "1.142.0"
   libraries:
     - name: sap.m
     - name: sap.ui.core
@@ -20,4 +20,4 @@ type: server-middleware
 metadata:
   name: ui5-v2-no-preload
 middleware:
-  path: lib/no-preload-middleware.mjs
+  path: lib/no-preload-middleware.js

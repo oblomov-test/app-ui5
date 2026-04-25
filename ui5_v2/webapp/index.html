@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>UI5 v2</title>
 
@@ -14,8 +13,14 @@
 		data-sap-ui-compat-version="edge"
 		data-sap-ui-libs="sap.m"
 		data-sap-ui-resource-roots='{"ui5_v2": "./"}'
-		data-sap-ui-on-init="module:ui5_v2/index"
+		data-sap-ui-on-init="module:sap/ui/core/ComponentSupport"
 	></script>
 </head>
-<body class="sapUiBody sapUiSizeCompact" id="content"></body>
+<body class="sapUiBody sapUiSizeCompact" id="content">
+	<div data-sap-ui-component
+		data-name="ui5_v2"
+		data-id="container"
+		data-handle-validation="true"
+		style="height: 100%"></div>
+</body>
 </html>

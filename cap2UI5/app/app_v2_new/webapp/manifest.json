@@ -1,0 +1,136 @@
+{
+	"_version": "2.0.0",
+	"sap.app": {
+		"id": "app_v2",
+		"type": "application",
+		"i18n": {
+			"bundleUrl": "i18n/i18n.properties",
+			"supportedLocales": [""],
+			"fallbackLocale": ""
+		},
+		"title": "{{appTitle}}",
+		"description": "{{appDescription}}",
+		"applicationVersion": {
+			"version": "0.0.1"
+		},
+		"dataSources": {
+			"http": {
+				"uri": "/rest/root/z2ui5",
+				"type": "OData",
+				"settings": {
+					"annotations": [],
+					"localUri": "localService/metadata.xml",
+					"odataVersion": "2.0"
+				}
+			}
+		},
+		"crossNavigation": {
+			"inbounds": {
+				"z2ui5-display": {
+					"semanticObject": "z2ui5",
+					"action": "display",
+					"title": "",
+					"signature": {
+						"parameters": {},
+						"additionalParameters": "allowed"
+					}
+				}
+			}
+		}
+	},
+	"sap.ui": {
+		"technology": "UI5",
+		"deviceTypes": {
+			"desktop": true,
+			"tablet": true,
+			"phone": true
+		}
+	},
+	"sap.fiori": {
+		"registrationIds": [],
+		"archeType": "transactional"
+	},
+	"sap.ui5": {
+		"flexEnabled": false,
+		"handleValidation": true,
+		"rootView": {
+			"viewName": "app_v2.view.App",
+			"type": "XML",
+			"id": "App"
+		},
+		"dependencies": {
+			"minUI5Version": "1.136.0",
+			"libs": {
+				"sap.m": {},
+				"sap.ui.core": {},
+				"sap.ui.unified": {}
+			}
+		},
+		"models": {
+			"i18n": {
+				"type": "sap.ui.model.resource.ResourceModel",
+				"settings": {
+					"bundleName": "app_v2.i18n.i18n",
+					"supportedLocales": [""],
+					"fallbackLocale": ""
+				}
+			}
+		},
+		"services": {
+			"ShellUIService": {
+				"factoryName": "sap.ushell.ui5service.ShellUIService",
+				"lazy": true
+			}
+		},
+		"resources": {
+			"css": [
+				{
+					"uri": "css/style.css"
+				}
+			]
+		},
+		"routing": {
+			"config": {
+				"routerClass": "sap.m.routing.Router",
+				"type": "View",
+				"viewType": "XML",
+				"path": "app_v2.view",
+				"controlId": "app",
+				"controlAggregation": "pages",
+				"clearControlAggregation": false
+			},
+			"routes": [
+				{
+					"name": "RouteView1",
+					"pattern": ":?query:",
+					"target": ["TargetView1"]
+				},
+				{
+					"name": "RouteView2",
+					"pattern": ":?query:",
+					"target": ["TargetView2"]
+				}
+			],
+			"targets": {
+				"TargetView1": {
+					"id": "View1",
+					"name": "View1",
+					"viewType": "XML",
+					"transition": "flip",
+					"clearControlAggregation": false
+				},
+				"TargetView2": {
+					"id": "View2",
+					"name": "View2",
+					"viewType": "XML",
+					"transition": "flip",
+					"clearControlAggregation": false
+				}
+			}
+		},
+		"contentDensities": {
+			"compact": true,
+			"cozy": true
+		}
+	}
+}

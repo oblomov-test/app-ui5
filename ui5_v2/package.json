@@ -4,7 +4,7 @@
   "description": "Modern UI5 2.x application (legacy-free)",
   "private": true,
   "scripts": {
-    "start": "ui5 serve --open index.html",
+    "start": "ui5 serve --open index.html --sap-csp-policies --serve-csp-reports",
     "build": "ui5 build --clean-dest",
     "lint": "npm run lint:eslint && npm run lint:ui5",
     "lint:eslint": "eslint webapp",

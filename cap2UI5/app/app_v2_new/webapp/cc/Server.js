@@ -74,7 +74,15 @@ sap.ui.define(
 		},
 
 		async readHttp() {
-			const body = z2ui5.safeStringify({ value: z2ui5.oBody }, 0);
+			// Fast path: native JSON.stringify is 10-50× faster than safeStringify (no replacer).
+			// Roundtrip bodies are structured data without cyclic refs in practice;
+			// safeStringify is only used as a defensive fallback if a cycle ever sneaks in.
+			let body;
+			try {
+				body = JSON.stringify({ value: z2ui5.oBody });
+			} catch {
+				body = z2ui5.safeStringify({ value: z2ui5.oBody }, 0);
+			}
 
 			const doPost = () => {
 				const headers = {

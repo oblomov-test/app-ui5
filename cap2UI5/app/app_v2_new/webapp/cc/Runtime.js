@@ -40,7 +40,9 @@ sap.ui.define([], () => {
 				return () => set.delete(fn);
 			},
 			emit(name, ...args) {
-				for (const fn of get(name)) {
+				const set = get(name);
+				if (set.size === 0) return;
+				for (const fn of set) {
 					try {
 						fn(...args);
 					} catch (e) {

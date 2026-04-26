@@ -200,7 +200,7 @@ sap.ui.define(
         else this.show();
       },
 
-      renderer: { apiVersion: 2, render() {} },
+      renderer() {},
     });
   },
 );

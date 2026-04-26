@@ -69,7 +69,7 @@ sap.ui.define(
               logLaunchpadError(`Component: ShellUIService init failed`, e);
             }
             try {
-              launchpad.CrossAppNavigator = await Container.getServiceAsync('CrossApplicationNavigation');
+              launchpad.CrossAppNavigator = Container.getService('CrossApplicationNavigation');
             } catch (e) {
               logLaunchpadError(`Component: CrossApplicationNavigation init failed`, e);
             }

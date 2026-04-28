@@ -5,6 +5,16 @@ sap.ui.define(
 
 		const _hashChanger = HashChanger.getInstance();
 
+		// Build a URL string from the current location, optionally stripping the
+		// trailing hash separator (`#`) when the hash content is empty. UI5's
+		// HashChanger.replaceHash('') leaves `#` in the URL; abap2UI5 keeps the
+		// URL clean, so we mirror that.
+		const _currentUrl = (keepHash) => {
+			const { pathname, search, hash } = window.location;
+			if (keepHash && hash && hash !== "#") return `${pathname}${search}${hash}`;
+			return `${pathname}${search}`;
+		};
+
 		return {
 			update(response) {
 				const oView = z2ui5.oView;
@@ -15,16 +25,23 @@ sap.ui.define(
 				const appStateActive = Adapter.appStateActive(response);
 				try {
 					if (pushState) {
-						const hash = _hashChanger.getHash() || "#";
+						const hash = _hashChanger.getHash();
+						const hashPart = hash ? `#${hash}` : "";
 						history.pushState(
 							oState,
 							"",
-							`${window.location.pathname}${window.location.search}${hash}${pushState}`,
+							`${window.location.pathname}${window.location.search}${hashPart}${pushState}`,
 						);
 					} else {
-						history.replaceState(oState, "", window.location.href);
+						history.replaceState(oState, "", _currentUrl(/*keepHash=*/ true));
 					}
-					_hashChanger.replaceHash(appStateActive ? `z2ui5-xapp-state=${response.ID ?? ""}` : "");
+					if (appStateActive) {
+						_hashChanger.replaceHash(`z2ui5-xapp-state=${response.ID ?? ""}`);
+					} else if (window.location.hash) {
+						// Strip stale hash + the `#` separator (left over from a
+						// previous appStateActive cycle, or from UI5's auto-`#`).
+						history.replaceState(oState, "", _currentUrl(/*keepHash=*/ false));
+					}
 				} catch (e) {
 					z2ui5.logError(`HistoryHelper.update failed`, e);
 				}

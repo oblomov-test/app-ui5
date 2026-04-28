@@ -296,7 +296,7 @@ describe("z2ui5_cl_core_client", () => {
 
     test("client event with arguments", () => {
       expect(client._event_client("DOWNLOAD", "file.pdf")).toBe(
-        ".eF(['DOWNLOAD','file.pdf'])"
+        ".eF('DOWNLOAD','file.pdf')"
       );
     });
   });

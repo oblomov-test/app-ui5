@@ -12,10 +12,10 @@
     "lint:ui5": "ui5lint"
   },
   "devDependencies": {
-    "@eslint/js": "^9.17.0",
-    "@ui5/cli": "^4.0.14",
-    "@ui5/linter": "^1.12.0",
-    "eslint": "^9.17.0",
-    "globals": "^15.14.0"
+    "@eslint/js": "^10",
+    "@ui5/cli": "^4",
+    "@ui5/linter": "^1",
+    "eslint": "^10",
+    "globals": "^17"
   }
 }

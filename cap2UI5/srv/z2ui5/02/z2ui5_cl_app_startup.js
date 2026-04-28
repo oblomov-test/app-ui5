@@ -1,151 +1,375 @@
-const z2ui5_if_app = require("../z2ui5_if_app");
-const DB = require("../01/01/z2ui5_cl_core_srv_draft");
+const z2ui5_if_app = require("./z2ui5_if_app");
+const z2ui5_cl_util = require("../00/03/z2ui5_cl_util");
 
+/**
+ * 1:1 port of abap2UI5 z2ui5_cl_app_startup.
+ *
+ * Launchpad / startup screen: lets the user enter an app class name, validates it
+ * via dynamic instantiation, and shows a "Link to the Application" once the class
+ * is confirmed loadable. Plus a System-Info popup, a Debugging hint, and links to
+ * sample repo / docs / GitHub PRs.
+ */
 class z2ui5_cl_app_startup extends z2ui5_if_app {
 
-  CLASSNAME = "";
+  // --- cs_event constants (mirrors abap CS_EVENT struct) ---
+  static CS_EVENT = Object.freeze({
+    BUTTON_CHECK:  "BUTTON_CHECK",
+    BUTTON_CHANGE: "BUTTON_CHANGE",
+    VALUE_HELP:    "VALUE_HELP",
+    OPEN_DEBUG:    "OPEN_DEBUG",
+    OPEN_INFO:     "OPEN_INFO",
+    SET_CONFIG:    "SET_CONFIG",
+    CLOSE:         "CLOSE",
+  });
 
-  // Registry of available apps
-  static APP_REGISTRY = [
-    { className: "z2ui5_cl_app_hello_world",   title: "Hello World",             description: "Simple input & button with two-way binding" },
-    { className: "z2ui5_cl_app_messages",       title: "Messages",                description: "Toast and MessageBox examples" },
-    { className: "z2ui5_cl_app_form",           title: "Form Layout",             description: "SimpleForm with various input controls" },
-    { className: "z2ui5_cl_app_table",          title: "Table",                   description: "Editable table with add/delete rows" },
-    { className: "z2ui5_cl_app_navigation",     title: "Navigation",              description: "App-to-app navigation with nav_app_call" },
-    { className: "z2ui5_cl_app_popup",          title: "Popup / Dialog",          description: "Dialog and popup examples" },
-    { className: "z2ui5_cl_app_read_people",    title: "External API (REST)",     description: "Fetch data from external REST API" },
-    { className: "z2ui5_cl_app_read_odata",     title: "External API (OData)",    description: "Fetch data via Northwind OData service" },
-    { className: "z2ui5_cl_app_view_xml",       title: "Static XML View",         description: "Load and display a static XML view file" },
-  ];
+  // --- ms_home struct ---
+  ms_home = {
+    url:                    "",
+    btn_text:               "",
+    btn_event_id:           "",
+    btn_icon:               "",
+    classname:              "",
+    class_value_state:      "None",  // sap.ui.core.ValueState enum — empty string would throw
+    class_value_state_text: "",
+    class_editable:         true,
+  };
+
+  mv_ui5_version = "";
+  client = null;
+
+  // --- Factory (mirrors abap CLASS-METHODS factory) ---
+  static factory() {
+    return new z2ui5_cl_app_startup();
+  }
+
+  reset_button_state() {
+    this.ms_home.btn_text     = "Check";
+    this.ms_home.btn_event_id = z2ui5_cl_app_startup.CS_EVENT.BUTTON_CHECK;
+    this.ms_home.btn_icon     = "sap-icon://validate";
+    this.ms_home.class_editable = true;
+    this.ms_home.class_value_state      = "None";
+    this.ms_home.class_value_state_text = "";
+  }
+
+  z2ui5_on_init() {
+    this.reset_button_state();
+    this.ms_home.classname = "z2ui5_cl_app_hello_world";
+  }
+
+  on_event_check() {
+    const className = z2ui5_cl_util.c_trim_upper(this.ms_home.classname).toLowerCase();
+    try {
+      const Cls = z2ui5_cl_util.rtti_get_class(className);
+      if (!Cls) throw new Error(`Class '${this.ms_home.classname}' not found`);
+      // attempt instantiation — if the class is a valid z2ui5_if_app subclass it succeeds
+      // eslint-disable-next-line no-new
+      new Cls();
+
+      this.client.message_toast_display("App is ready to start!");
+      this.ms_home.btn_text       = "Edit";
+      this.ms_home.btn_event_id   = z2ui5_cl_app_startup.CS_EVENT.BUTTON_CHANGE;
+      this.ms_home.btn_icon       = "sap-icon://edit";
+      this.ms_home.class_value_state = "Success";
+      this.ms_home.class_editable = false;
+
+      const cfg = this.client.get().S_CONFIG || {};
+      this.ms_home.url = z2ui5_cl_util.app_get_url({
+        classname: className,
+        origin:    cfg.ORIGIN || "",
+        pathname:  cfg.PATHNAME || "",
+        search:    cfg.SEARCH || "",
+        hash:      cfg.HASH || "",
+      });
+    } catch (e) {
+      this.ms_home.class_value_state_text = e.message;
+      this.ms_home.class_value_state      = "Warning";
+      this.client.message_box_display(`Class '${this.ms_home.classname}' could not be loaded: ${e.message}`, "error");
+    }
+  }
 
   async main(client) {
-    const event = client.get().EVENT;
+    this.client = client;
 
-    switch (event) {
-      case "BUTTON_CHECK": {
-        const className = this.CLASSNAME?.trim();
-        if (!className) {
-          client.message_toast_display("Please enter a class name");
-          break;
-        }
-        const AppClass = DB.findAppClass(className);
-        if (AppClass) {
-          const app = new AppClass();
-          client.nav_app_call(app);
-        } else {
-          client.message_box_display(
-            `Class "${className}" not found. Check the name and try again.`,
-            "Error",
-            "error"
-          );
-        }
-        break;
-      }
+    if (client.check_on_init()) {
+      this.z2ui5_on_init();
+      this.view_display_start();
+      return;
+    }
 
-      case "NAV_TO_APP": {
-        const className = client.get().T_EVENT_ARG[0];
-        if (className) {
-          const AppClass = DB.findAppClass(className);
-          if (AppClass) {
-            client.nav_app_call(new AppClass());
+    if (client.get().CHECK_ON_NAVIGATED) {
+      try {
+        const z2ui5_cl_pop_to_select = require("./01/z2ui5_cl_pop_to_select");
+        const prev = client.get_app_prev();
+        if (prev instanceof z2ui5_cl_pop_to_select) {
+          const r = prev.result();
+          if (r.check_confirmed && r.row) {
+            this.ms_home.classname = r.row.KEY || r.row.TEXT || "";
+            this.view_display_start();
+            return;
           }
         }
+      } catch {
+        // no-op
+      }
+    }
+
+    this.z2ui5_on_event();
+  }
+
+  z2ui5_on_event() {
+    const event = this.client.get().EVENT;
+    const E = z2ui5_cl_app_startup.CS_EVENT;
+    switch (event) {
+      case E.SET_CONFIG: {
+        const Cls = z2ui5_cl_util.rtti_get_class("z2ui5_cl_app_icf_config");
+        if (Cls) this.client.nav_app_call(new Cls());
         break;
       }
-
+      case E.CLOSE:
+        this.client.popup_destroy();
+        break;
+      case E.OPEN_DEBUG:
+        this.client.message_box_display("Press CTRL+F12 to open the debugging tools");
+        break;
+      case E.OPEN_INFO:
+        this.view_display_popup();
+        return;
+      case E.BUTTON_CHECK:
+        this.on_event_check();
+        this.view_display_start();
+        break;
+      case E.BUTTON_CHANGE:
+        this.reset_button_state();
+        this.view_display_start();
+        break;
+      case E.VALUE_HELP: {
+        const z2ui5_cl_pop_to_select = require("./01/z2ui5_cl_pop_to_select");
+        const apps = z2ui5_cl_util.rtti_get_classes_impl_intf(z2ui5_if_app);
+        if (!apps.length) {
+          this.client.message_box_display("No apps found that implement z2ui5_if_app", "error");
+          return;
+        }
+        this.client.nav_app_call(z2ui5_cl_pop_to_select.factory({ i_tab: apps, i_title: "Select an App" }));
+        break;
+      }
       default:
-        this.displayView(client);
+        this.view_display_start();
         break;
     }
   }
 
-  displayView(client) {
+  view_display_start() {
     const Z2UI5_CL_XML_VIEW = require("./z2ui5_cl_xml_view");
     const view = new Z2UI5_CL_XML_VIEW();
+    const E = z2ui5_cl_app_startup.CS_EVENT;
+    const c = this.client;
 
-    const shell = view.Shell();
-    const page = shell.Page({
-      title: "cap2UI5 - Developing UI5 Apps with CAP Backend",
-    });
-
-    // Header
-    const headerContent = page.headerContent();
-    headerContent.ToolbarSpacer();
-    headerContent
-      .Button({
-        icon: "sap-icon://hint",
-        text: "GitHub",
-        press: `.eF('OPEN_NEW_TAB', 'https://github.com/niclas-niclas/cap2UI5')`,
+    const page = view
+      .Shell()
+      .Page({
+        title: "abap2UI5 - Developing UI5 Apps Purely in ABAP",
+        showNavButton: false,
       });
 
-    // Quick start form
+    // --- Header toolbar ---
+    const header = page.headerContent();
+    header.ToolbarSpacer();
+    header.Button({ text: "Debugging Tools", icon: "sap-icon://enablement", press: c._event(E.OPEN_DEBUG) });
+    header.Button({ text: "System",          icon: "sap-icon://information", press: c._event(E.OPEN_INFO) });
+    if (z2ui5_cl_util.rtti_check_class_exists("z2ui5_cl_app_icf_config")) {
+      header.Button({ text: "Config", icon: "sap-icon://settings", press: c._event(E.SET_CONFIG) });
+    }
+
+    // --- SimpleForm with all sections ---
     const form = page.SimpleForm({
       editable: true,
       layout: "ResponsiveGridLayout",
-      columnsL: "1",
-      columnsM: "1",
+      labelSpanXL: "4",
       labelSpanL: "3",
       labelSpanM: "4",
       labelSpanS: "12",
+      adjustLabelSpan: false,
+      emptySpanXL: "0",
+      emptySpanL: "4",
+      emptySpanM: "0",
+      emptySpanS: "0",
+      columnsXL: "1",
+      columnsL: "1",
+      columnsM: "1",
+      singleContainerFullSize: false,
     });
-
     const content = form.content();
-    content.cc("Toolbar", { ns: "m" }).Title({ text: "Quick Start" }).get_parent();
 
+    // ===== Quickstart =====
+    content.cc("Toolbar", { ns: "m" }).Title({ text: "Quickstart" }).get_parent();
     content
-      .Label({ text: "Step 1" })
-      .Text({ text: "Create a new JavaScript class in srv/apps/" })
-      .Label({ text: "Step 2" })
-      .Text({ text: "Implement an async main(client) method" })
-      .Label({ text: "Step 3" })
-      .Text({ text: "Use client._bind_edit(), client._event(), and the XML view builder" })
+      .Label({ text: "Step 1" }).Text({ text: "Create a new class in your ABAP system" })
+      .Label({ text: "Step 2" }).Text({ text: "Add the interface: Z2UI5_IF_APP" })
+      .Label({ text: "Step 3" }).Text({ text: "Define the view, implement behavior" })
+      .Label({})
+      .Link({
+        text: "(Example)",
+        target: "_blank",
+        href: "https://github.com/abap2UI5/abap2UI5/blob/main/src/02/z2ui5_cl_app_hello_world.clas.abap",
+      })
       .Label({ text: "Step 4" });
 
-    content.Input({
-      placeholder: "Enter the class name and press 'Go'",
-      value: client._bind_edit(this.CLASSNAME),
-      submit: client._event("BUTTON_CHECK"),
-      width: "70%",
-    });
+    if (this.ms_home.class_editable) {
+      content.Input({
+        placeholder: "fill in the class name and press 'check'",
+        enabled: c._bind(this.ms_home.class_editable),
+        value: c._bind_edit(this.ms_home.classname),
+        valueState: c._bind(this.ms_home.class_value_state),
+        valueStateText: c._bind(this.ms_home.class_value_state_text),
+        submit: c._event(this.ms_home.btn_event_id),
+        valueHelpRequest: c._event(E.VALUE_HELP),
+        showValueHelp: true,
+        width: "70%",
+      });
+    } else {
+      content.Text({ text: this.ms_home.classname });
+    }
 
     content.Label({});
     content.Button({
-      press: client._event("BUTTON_CHECK"),
-      text: "Go",
-      icon: "sap-icon://initiative",
-      type: "Emphasized",
+      press: c._event(this.ms_home.btn_event_id),
+      text: c._bind(this.ms_home.btn_text),
+      icon: c._bind(this.ms_home.btn_icon),
       width: "70%",
     });
 
-    // Sample apps section
-    content.cc("Toolbar", { ns: "m" }).Title({ text: "Sample Applications" }).get_parent();
+    content.Label({ text: "Step 5" });
+    // UI5 expression binding requires `${...}` (with $-prefix) to dereference a model path.
+    // First `$` is a literal in the template literal, second `${...}` is JS interpolation.
+    const bindEditable = c._bind(this.ms_home.class_editable);
+    content.Link({
+      text: "Link to the Application",
+      target: "_blank",
+      href: c._bind(this.ms_home.url),
+      enabled: `{= $${bindEditable} === false }`,
+    });
 
-    // Build a list of sample apps
-    for (const app of z2ui5_cl_app_startup.APP_REGISTRY) {
-      content.Label({ text: app.title });
+    // ===== What's next? =====
+    content.cc("Toolbar", { ns: "m" }).Title({ text: "What's next?" }).get_parent();
+    if (z2ui5_cl_util.rtti_check_class_exists("z2ui5_cl_demo_app_000")) {
+      const cfg = c.get().S_CONFIG || {};
+      const samplesUrl = z2ui5_cl_util.app_get_url({
+        classname: "z2ui5_cl_demo_app_000",
+        origin:   cfg.ORIGIN || "",
+        pathname: cfg.PATHNAME || "",
+        search:   cfg.SEARCH || "",
+        hash:     cfg.HASH || "",
+      });
+      content.Label({ text: "Start Developing" });
       content.Button({
-        text: `${app.className}`,
-        press: client._event("NAV_TO_APP", app.className),
+        text: "Explore Code Samples",
+        press: c._event_client(c.cs_event.OPEN_NEW_TAB, [samplesUrl]),
         width: "70%",
-        icon: "sap-icon://play",
+      });
+    } else {
+      content.Label({ text: "Install the sample repository" });
+      content.Link({
+        text: "And explore more than 200 sample apps...",
+        target: "_blank",
+        href: "https://github.com/abap2UI5/abap2UI5-samples",
       });
     }
 
-    // Contribution section
-    content.cc("Toolbar", { ns: "m" }).Title({ text: "About" }).get_parent();
-    content
-      .Label({ text: "Backend" })
-      .Text({ text: "SAP CAP (Node.js)" })
-      .Label({ text: "Frontend" })
-      .Text({ text: "SAP UI5 (synced from abap2UI5)" })
-      .Label({ text: "Concept" });
+    // ===== Contribution =====
+    content.cc("Toolbar", { ns: "m" }).Title({ text: "Contribution" }).get_parent();
+    content.Label({ text: "Open an issue" });
     content.Link({
-      href: "https://github.com/abap2UI5/abap2UI5",
-      text: "Based on abap2UI5 by Oblomov-dev",
+      text: "You have problems, comments or wishes?",
       target: "_blank",
+      href: "https://github.com/abap2UI5/abap2UI5/issues",
+    });
+    content.Label({ text: "Open a Pull Request" });
+    content.Link({
+      text: "You added a new feature or fixed a bug?",
+      target: "_blank",
+      href: "https://github.com/abap2UI5/abap2UI5/pulls",
     });
 
-    client.view_display(view.stringify());
+    // ===== Documentation =====
+    content.cc("Toolbar", { ns: "m" }).Title({ text: "Documentation" }).get_parent();
+    content.Label({});
+    content.Link({ text: "abap2UI5.org", target: "_blank", href: "https://abap2UI5.org" });
+
+    c.view_display(view.stringify());
+  }
+
+  view_display_popup() {
+    const Z2UI5_CL_XML_VIEW = require("./z2ui5_cl_xml_view");
+    const view = Z2UI5_CL_XML_VIEW.factory_popup();
+    const E = z2ui5_cl_app_startup.CS_EVENT;
+    const c = this.client;
+
+    const dialog = view.Dialog({
+      title: "abap2UI5 - System Information",
+      afterClose: c._event(E.CLOSE),
+      contentWidth: "30em",
+    });
+
+    const dContent = dialog.content();
+
+    // z2ui5.Info custom control populates ui5_version frontend-side via setProperty.
+    // Use _bind (one-way path /mv_ui5_version) on BOTH Info and the Text below — same
+    // path, so when Info's TwoWay-default JSONModel binding writes back, the Text
+    // re-renders. abap2UI5 uses the same pattern. Using _bind_edit here would write
+    // to /XX/mv_ui5_version, leaving the Text's /mv_ui5_version untouched.
+    dContent._z2ui5().info_frontend({ ui5_version: c._bind(this.mv_ui5_version) });
+
+    const form = dContent.SimpleForm({
+      editable: true,
+      layout: "ResponsiveGridLayout",
+      labelSpanXL: "4",
+      labelSpanL: "3",
+      labelSpanM: "4",
+      labelSpanS: "12",
+      adjustLabelSpan: false,
+      emptySpanXL: "0",
+      emptySpanL: "4",
+      emptySpanM: "0",
+      emptySpanS: "0",
+      columnsXL: "1",
+      columnsL: "1",
+      columnsM: "1",
+      singleContainerFullSize: false,
+    });
+    const fContent = form.content();
+
+    // Frontend section
+    fContent.cc("Toolbar", { ns: "m" }).Title({ text: "Frontend" }).get_parent();
+    fContent.Label({ text: "UI5 Version" }).Text({ text: c._bind(this.mv_ui5_version) });
+    fContent.Label({ text: "Launchpad active" }).CheckBox({
+      enabled: false,
+      selected: !!c.get().CHECK_LAUNCHPAD_ACTIVE,
+    });
+
+    // Backend section
+    fContent.cc("Toolbar", { ns: "m" }).Title({ text: "Backend" }).get_parent();
+    fContent.Label({ text: "ABAP for Cloud" }).CheckBox({
+      enabled: false,
+      selected: z2ui5_cl_util.context_check_abap_cloud(),
+    });
+    fContent.Label({ text: "Backend Implementation" }).Text({ text: "CAP Node.js (cap2UI5)" });
+
+    // abap2UI5 section
+    fContent.cc("Toolbar", { ns: "m" }).Title({ text: "abap2UI5" }).get_parent();
+    fContent.Label({ text: "Protocol Mirror" }).Text({ text: "wire-format compatible" });
+    fContent.Label({ text: "Source" }).Link({
+      text: "github.com/abap2UI5/abap2UI5",
+      target: "_blank",
+      href: "https://github.com/abap2UI5/abap2UI5",
+    });
+
+    dialog.endButton().Button({
+      text: "Close",
+      press: c._event(E.CLOSE),
+      type: "Emphasized",
+    });
+
+    c.popup_display(view.stringify());
   }
 }
 

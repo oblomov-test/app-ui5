@@ -1,4 +1,4 @@
-const z2ui5_if_app = require("../srv/z2ui5/z2ui5_if_app");
+const z2ui5_if_app = require("../srv/z2ui5/02/z2ui5_if_app");
 
 describe("z2ui5_if_app", () => {
   test("cannot be instantiated directly", () => {
@@ -29,14 +29,17 @@ describe("z2ui5_if_app", () => {
     const apps = [
       require("../srv/z2ui5/02/z2ui5_cl_app_hello_world"),
       require("../srv/z2ui5/02/z2ui5_cl_app_startup"),
-      require("../srv/apps/z2ui5_cl_app_form"),
-      require("../srv/apps/z2ui5_cl_app_messages"),
-      require("../srv/apps/z2ui5_cl_app_table"),
-      require("../srv/apps/z2ui5_cl_app_navigation"),
-      require("../srv/apps/z2ui5_cl_app_popup"),
-      require("../srv/apps/z2ui5_cl_app_read_people"),
-      require("../srv/apps/z2ui5_cl_app_read_odata"),
-      require("../srv/apps/z2ui5_cl_app_view_xml"),
+      require("../srv/samples/z2ui5_cl_demo_app_000"),
+      require("../srv/samples/z2ui5_cl_demo_app_001"),
+      require("../srv/samples/z2ui5_cl_demo_app_002"),
+      require("../srv/samples/z2ui5_cl_demo_app_003"),
+      require("../srv/samples/z2ui5_cl_demo_app_004"),
+      require("../srv/samples/z2ui5_cl_demo_app_005"),
+      require("../srv/samples/z2ui5_cl_demo_app_006"),
+      require("../srv/samples/z2ui5_cl_demo_app_008"),
+      require("../srv/samples/z2ui5_cl_demo_app_009"),
+      require("../srv/samples/z2ui5_cl_demo_app_010"),
+      require("../srv/samples/z2ui5_cl_demo_app_011"),
     ];
 
     for (const AppClass of apps) {

@@ -1,9 +1,9 @@
-sap.ui.define(["z2ui5/_HiddenControl", "z2ui5/Runtime"], (HiddenControl, z2ui5) =>
-	HiddenControl.extend("z2ui5.Scrolling", {
+sap.ui.define(["sap/ui/core/Control", "z2ui5/Runtime"], (Control, z2ui5) =>
+	Control.extend("z2ui5.Scrolling", {
 		metadata: {
 			properties: {
 				setUpdate: { type: "boolean", defaultValue: true },
-				items: { type: "object" },
+				items:     { type: "object" },
 			},
 		},
 
@@ -92,10 +92,18 @@ sap.ui.define(["z2ui5/_HiddenControl", "z2ui5/Runtime"], (HiddenControl, z2ui5) 
 			}
 		},
 
-		afterHiddenRender() {
-			if (!this.getProperty("setUpdate")) return;
-			this.setProperty("setUpdate", false, true);
-			this._pendingScroll = true;
+		renderer: {
+			apiVersion: 2,
+			render(oRm, oControl) {
+				oRm.openStart("span", oControl);
+				oRm.style("display", "none");
+				oRm.openEnd();
+				oRm.close("span");
+
+				if (!oControl.getProperty("setUpdate")) return;
+				oControl.setProperty("setUpdate", false, true);
+				oControl._pendingScroll = true;
+			},
 		},
 	}),
 );

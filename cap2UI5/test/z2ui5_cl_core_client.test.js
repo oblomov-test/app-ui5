@@ -82,16 +82,16 @@ describe("z2ui5_cl_core_client", () => {
   });
 
   describe("view_model_update", () => {
-    test("sets MODEL_UPDATE flag", () => {
+    test("sets CHECK_UPDATE_MODEL flag", () => {
       client.view_model_update();
-      expect(client.S_VIEW.MODEL_UPDATE).toBe(true);
+      expect(client.S_VIEW.CHECK_UPDATE_MODEL).toBe(true);
     });
   });
 
   describe("view_destroy", () => {
-    test("sets DESTROY flag", () => {
+    test("sets CHECK_DESTROY flag", () => {
       client.view_destroy();
-      expect(client.S_VIEW).toEqual({ DESTROY: true });
+      expect(client.S_VIEW).toEqual({ CHECK_DESTROY: true });
     });
   });
 
@@ -103,33 +103,33 @@ describe("z2ui5_cl_core_client", () => {
       expect(client.S_POPUP).toEqual({ XML: "<Dialog/>" });
     });
 
-    test("popup_destroy sets CLOSE flag", () => {
+    test("popup_destroy sets CHECK_DESTROY flag", () => {
       client.popup_destroy();
-      expect(client.S_POPUP).toEqual({ CLOSE: true });
+      expect(client.S_POPUP).toEqual({ CHECK_DESTROY: true });
     });
 
     test("popup_model_update sets MODEL_UPDATE flag", () => {
       client.popup_model_update();
-      expect(client.S_POPUP.MODEL_UPDATE).toBe(true);
+      expect(client.S_POPUP.CHECK_UPDATE_MODEL).toBe(true);
     });
   });
 
   // ===== popover =====
 
   describe("popover_display / popover_destroy", () => {
-    test("popover_display sets S_POPOVER with XML and BY_ID", () => {
+    test("popover_display sets S_POPOVER with XML and OPEN_BY_ID", () => {
       client.popover_display("<Popover/>", "myBtn");
-      expect(client.S_POPOVER).toEqual({ XML: "<Popover/>", BY_ID: "myBtn" });
+      expect(client.S_POPOVER).toEqual({ XML: "<Popover/>", OPEN_BY_ID: "myBtn" });
     });
 
-    test("popover_destroy sets CLOSE flag", () => {
+    test("popover_destroy sets CHECK_DESTROY flag", () => {
       client.popover_destroy();
-      expect(client.S_POPOVER).toEqual({ CLOSE: true });
+      expect(client.S_POPOVER).toEqual({ CHECK_DESTROY: true });
     });
 
     test("popover_model_update sets MODEL_UPDATE flag", () => {
       client.popover_model_update();
-      expect(client.S_POPOVER.MODEL_UPDATE).toBe(true);
+      expect(client.S_POPOVER.CHECK_UPDATE_MODEL).toBe(true);
     });
   });
 
@@ -148,7 +148,7 @@ describe("z2ui5_cl_core_client", () => {
 
     test("nest_view_destroy sets DESTROY flag", () => {
       client.nest_view_destroy();
-      expect(client.S_VIEW_NEST).toEqual({ DESTROY: true });
+      expect(client.S_VIEW_NEST).toEqual({ CHECK_DESTROY: true });
     });
   });
 
@@ -165,7 +165,7 @@ describe("z2ui5_cl_core_client", () => {
 
     test("nest2_view_destroy sets DESTROY flag", () => {
       client.nest2_view_destroy();
-      expect(client.S_VIEW_NEST2).toEqual({ DESTROY: true });
+      expect(client.S_VIEW_NEST2).toEqual({ CHECK_DESTROY: true });
     });
   });
 
@@ -183,7 +183,7 @@ describe("z2ui5_cl_core_client", () => {
       expect(client.aBind[0]).toEqual({
         name: "NAME",
         val: "Alice",
-        type: "BIND",
+        type: "ONE_WAY",
       });
     });
 
@@ -196,7 +196,7 @@ describe("z2ui5_cl_core_client", () => {
       const result = client._bind("unknown_value_xyz");
       expect(result).toMatch(/^\{\/(__bind_\d+)\}$/);
       expect(client.aBind).toHaveLength(1);
-      expect(client.aBind[0].type).toBe("BIND");
+      expect(client.aBind[0].type).toBe("ONE_WAY");
     });
   });
 
@@ -210,7 +210,7 @@ describe("z2ui5_cl_core_client", () => {
 
     test("registers BIND_EDIT type in aBind", () => {
       client._bind_edit(mockApp.AGE);
-      expect(client.aBind[0].type).toBe("BIND_EDIT");
+      expect(client.aBind[0].type).toBe("TWO_WAY");
     });
 
     test("fallback: creates dynamic edit binding for unknown value", () => {
@@ -225,7 +225,7 @@ describe("z2ui5_cl_core_client", () => {
     test("creates local binding with auto-generated name", () => {
       const result = client._bind_local("temp_value");
       expect(result).toMatch(/^\{\/(__local_\d+)\}$/);
-      expect(client.aBind[0].type).toBe("BIND");
+      expect(client.aBind[0].type).toBe("ONE_WAY");
       expect(client.aBind[0].val).toBe("temp_value");
     });
   });
@@ -262,17 +262,27 @@ describe("z2ui5_cl_core_client", () => {
   // ===== _event =====
 
   describe("_event", () => {
-    test("single event name", () => {
-      expect(client._event("CLICK")).toBe(".eB(['CLICK'])");
+    test("single event name (no t_arg)", () => {
+      expect(client._event("CLICK")).toBe(".eB(['CLICK','','',''])");
     });
 
-    test("event with additional arguments", () => {
-      expect(client._event("NAV", "app1")).toBe(".eB(['NAV','app1'])");
+    test("event with t_arg array (modern signature)", () => {
+      expect(client._event("NAV", ["app1"])).toBe(".eB(['NAV','','',''],'app1')");
     });
 
-    test("event with multiple arguments", () => {
-      expect(client._event("DO", "a", "b", "c")).toBe(
-        ".eB(['DO','a','b','c'])"
+    test("event with multiple t_arg values", () => {
+      expect(client._event("DO", ["a", "b", "c"])).toBe(
+        ".eB(['DO','','',''],'a','b','c')"
+      );
+    });
+
+    test("legacy single string arg is auto-wrapped to t_arg", () => {
+      expect(client._event("NAV", "app1")).toBe(".eB(['NAV','','',''],'app1')");
+    });
+
+    test("s_ctrl flags set positions [2] and [3]", () => {
+      expect(client._event("CLICK", [], { bypass_busy: true, force_main_model: true })).toBe(
+        ".eB(['CLICK','','X','X'])"
       );
     });
   });
@@ -446,14 +456,67 @@ describe("z2ui5_cl_core_client", () => {
       expect(client.get_frontend_data()).toEqual({});
     });
 
-    test("follow_up_action stores JS string", () => {
-      client.follow_up_action("alert('hello')");
-      expect(client._follow_up_action).toBe("alert('hello')");
+    test("follow_up_action pushes JS string onto array", () => {
+      client.follow_up_action(".eF('FOO')");
+      client.follow_up_action(".eF('BAR')");
+      expect(client._follow_up_actions).toEqual([".eF('FOO')", ".eF('BAR')"]);
     });
 
     test("set_push_state stores state", () => {
       client.set_push_state("/my/path");
       expect(client._push_state).toBe("/my/path");
+    });
+  });
+
+  // ===== frontend action convenience methods =====
+
+  describe("action convenience methods", () => {
+    test("clipboard_copy queues CLIPBOARD_COPY eF", () => {
+      client.clipboard_copy("hello");
+      expect(client._follow_up_actions).toEqual([".eF(['CLIPBOARD_COPY','hello'])"]);
+    });
+
+    test("clipboard_copy escapes apostrophes", () => {
+      client.clipboard_copy("it's");
+      expect(client._follow_up_actions[0]).toBe(".eF(['CLIPBOARD_COPY','it\\'s'])");
+    });
+
+    test("history_back queues no-arg eF", () => {
+      client.history_back();
+      expect(client._follow_up_actions).toEqual([".eF('HISTORY_BACK')"]);
+    });
+
+    test("file_download queues two args", () => {
+      client.file_download("data:text/plain;base64,SGk=", "hi.txt");
+      expect(client._follow_up_actions[0]).toBe(
+        ".eF(['DOWNLOAD_B64_FILE','data:text/plain;base64,SGk=','hi.txt'])"
+      );
+    });
+
+    test("system_logout without arg", () => {
+      client.system_logout();
+      expect(client._follow_up_actions).toEqual([".eF('SYSTEM_LOGOUT')"]);
+    });
+
+    test("system_logout with custom URL", () => {
+      client.system_logout("/my/logoff");
+      expect(client._follow_up_actions[0]).toBe(".eF(['SYSTEM_LOGOUT','/my/logoff'])");
+    });
+
+    test("multiple convenience calls accumulate in order", () => {
+      client.clipboard_copy("x");
+      client.popup_close();
+      client.history_back();
+      expect(client._follow_up_actions).toHaveLength(3);
+      expect(client._follow_up_actions[0]).toContain("CLIPBOARD_COPY");
+      expect(client._follow_up_actions[1]).toContain("POPUP_CLOSE");
+      expect(client._follow_up_actions[2]).toContain("HISTORY_BACK");
+    });
+
+    test("CS_EVENT constants are exposed on the class", () => {
+      const Client = require("../srv/z2ui5/01/02/z2ui5_cl_core_client");
+      expect(Client.CS_EVENT.CLIPBOARD_COPY).toBe("CLIPBOARD_COPY");
+      expect(Client.CS_EVENT.HISTORY_BACK).toBe("HISTORY_BACK");
     });
   });
 });

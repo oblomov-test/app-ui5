@@ -57,13 +57,20 @@ sap.ui.define([], () => {
 	})();
 
 	// Records a property change at the given UI5 path "/XX/attr[/rowIdx/field]".
-	// Parses once on event, stores structured record in xxChanges Map (deduped by path).
+	// Parses once on event, stores structured record in xxChanges Map.
+	//
+	// Only EXACTLY 3 segments (flat-table row-field) become a __delta patch.
+	// Anything shallower (scalar/struct) or deeper (nested tree) falls back to
+	// full-attr replace. The Map is keyed so that multiple writes to the same
+	// attr in full-replace mode dedupe to a single entry.
 	z2ui5.recordChange ??= function (fullPath) {
 		if (!fullPath?.startsWith("/XX/")) return;
-		const [attr, rowIdxStr, field] = fullPath.slice(4).split("/");
-		const isRowField = field !== undefined && rowIdxStr !== "" && !isNaN(rowIdxStr);
-		const record = isRowField ? { attr, rowIdx: +rowIdxStr, field } : { attr };
-		(this.xxChanges ??= new Map()).set(fullPath, record);
+		const parts = fullPath.slice(4).split("/");
+		const attr = parts[0];
+		const isRowField = parts.length === 3 && parts[1] !== "" && !isNaN(parts[1]) && parts[2] !== "";
+		const record = isRowField ? { attr, rowIdx: +parts[1], field: parts[2] } : { attr };
+		const key = isRowField ? fullPath : `/XX/${attr}`;
+		(this.xxChanges ??= new Map()).set(key, record);
 	};
 
 	// Cycle-safe JSON.stringify — replaces circular refs with "[Circular]" sentinel.

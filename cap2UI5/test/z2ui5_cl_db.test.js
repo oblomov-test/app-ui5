@@ -7,14 +7,14 @@ describe("z2ui5_cl_db", () => {
     test("serializes app with class name and file path", () => {
       const HelloWorld = require("../srv/z2ui5/02/z2ui5_cl_app_hello_world");
       const app = new HelloWorld();
-      app.NAME = "Test";
+      app.name = "Test";
 
       const json = DB.serialize(app);
       const parsed = JSON.parse(json);
 
       expect(parsed.__className).toBe("z2ui5_cl_app_hello_world");
       expect(parsed.__filePath).toBeDefined();
-      expect(parsed.NAME).toBe("Test");
+      expect(parsed.name).toBe("Test");
     });
 
     test("serializes only data properties, not functions", () => {
@@ -26,8 +26,8 @@ describe("z2ui5_cl_db", () => {
 
       // main is a function and should NOT be serialized
       expect(parsed.main).toBeUndefined();
-      // NAME is a data property and should be serialized
-      expect(parsed).toHaveProperty("NAME");
+      // name is a data property and should be serialized
+      expect(parsed).toHaveProperty("name");
     });
   });
 
@@ -35,13 +35,13 @@ describe("z2ui5_cl_db", () => {
     test("round-trip: serialize then deserialize restores app", () => {
       const HelloWorld = require("../srv/z2ui5/02/z2ui5_cl_app_hello_world");
       const original = new HelloWorld();
-      original.NAME = "RoundTrip";
+      original.name = "RoundTrip";
 
       const json = DB.serialize(original);
       const restored = DB.deserialize(json);
 
       expect(restored.constructor.name).toBe("z2ui5_cl_app_hello_world");
-      expect(restored.NAME).toBe("RoundTrip");
+      expect(restored.name).toBe("RoundTrip");
       expect(typeof restored.main).toBe("function");
     });
 
@@ -61,42 +61,34 @@ describe("z2ui5_cl_db", () => {
     });
   });
 
-  // ===== serialize apps from /apps/ folder =====
+  // ===== serialize apps from /samples/ folder =====
 
-  describe("serialize apps from /apps/ folder", () => {
-    test("round-trip for z2ui5_cl_app_messages", () => {
-      const AppClass = require("../srv/apps/z2ui5_cl_app_messages");
+  describe("serialize demo apps from /samples/ folder", () => {
+    test("round-trip for z2ui5_cl_demo_app_001", () => {
+      const AppClass = require("../srv/samples/z2ui5_cl_demo_app_001");
       const app = new AppClass();
 
       const json = DB.serialize(app);
       const restored = DB.deserialize(json);
 
-      expect(restored.constructor.name).toBe("z2ui5_cl_app_messages");
+      expect(restored.constructor.name).toBe("z2ui5_cl_demo_app_001");
       expect(typeof restored.main).toBe("function");
     });
 
-    test("round-trip for z2ui5_cl_app_form", () => {
-      const AppClass = require("../srv/apps/z2ui5_cl_app_form");
+    test("round-trip for z2ui5_cl_demo_app_011 preserves table data", () => {
+      const AppClass = require("../srv/samples/z2ui5_cl_demo_app_011");
       const app = new AppClass();
-      app.FIRST_NAME = "Max";
-      app.LAST_NAME = "Muster";
+      app.t_tab = [
+        { selkz: false, title: "Item A", value: "1" },
+        { selkz: true,  title: "Item B", value: "2" },
+      ];
 
       const json = DB.serialize(app);
       const restored = DB.deserialize(json);
 
-      expect(restored.FIRST_NAME).toBe("Max");
-      expect(restored.LAST_NAME).toBe("Muster");
-    });
-
-    test("round-trip for z2ui5_cl_app_table", () => {
-      const AppClass = require("../srv/apps/z2ui5_cl_app_table");
-      const app = new AppClass();
-
-      const json = DB.serialize(app);
-      const restored = DB.deserialize(json);
-
-      expect(restored.ITEMS).toHaveLength(3);
-      expect(restored.ITEMS[0].NAME).toBe("Alice");
+      expect(restored.t_tab).toHaveLength(2);
+      expect(restored.t_tab[1].title).toBe("Item B");
+      expect(restored.t_tab[1].selkz).toBe(true);
     });
   });
 
@@ -108,9 +100,9 @@ describe("z2ui5_cl_db", () => {
       expect(filePath).toContain("z2ui5_cl_app_hello_world.js");
     });
 
-    test("finds messages app in apps/ folder", () => {
-      const filePath = DB._findAppFile("z2ui5_cl_app_messages");
-      expect(filePath).toContain("z2ui5_cl_app_messages.js");
+    test("finds demo app in samples/ folder", () => {
+      const filePath = DB._findAppFile("z2ui5_cl_demo_app_001");
+      expect(filePath).toContain("z2ui5_cl_demo_app_001.js");
     });
 
     test("returns default path for unknown class", () => {
@@ -129,8 +121,8 @@ describe("z2ui5_cl_db", () => {
       expect(typeof app.main).toBe("function");
     });
 
-    test("returns class for known app in apps/", () => {
-      const AppClass = DB.findAppClass("z2ui5_cl_app_messages");
+    test("returns class for known demo app in samples/", () => {
+      const AppClass = DB.findAppClass("z2ui5_cl_demo_app_001");
       expect(AppClass).not.toBeNull();
     });
 

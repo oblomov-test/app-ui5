@@ -1,125 +1,107 @@
-const DB = require("../01/z2ui5_cl_core_srv_draft");
-const z2ui5_if_app = require("../../z2ui5_if_app");
+const z2ui5_cl_core_app       = require("./z2ui5_cl_core_app");
+const z2ui5_cl_core_srv_model = require("./z2ui5_cl_core_srv_model");
 
+/**
+ * Roundtrip orchestrator — JS port of abap2UI5 z2ui5_cl_core_handler.
+ *
+ * Glues together the four core services per request:
+ *   - z2ui5_cl_core_action     resolves which app to load
+ *   - z2ui5_cl_core_app        validates / runs / persists the app
+ *   - z2ui5_cl_core_srv_model  applies XX delta + builds response model
+ *   - z2ui5_cl_core_srv_event  generates press="…" strings (used by client)
+ *   - z2ui5_cl_core_srv_bind   binds values → model paths (used by client)
+ */
 class z2ui5_cl_core_handler {
 
+  /** @deprecated Use z2ui5_cl_core_app.validate. */
   static _validateApp(oApp) {
-    if (!(oApp instanceof z2ui5_if_app)) {
-      throw new Error(
-        `${oApp?.constructor?.name || "Unknown"} must extend z2ui5_if_app (INTERFACES z2ui5_if_app)`
-      );
-    }
+    return z2ui5_cl_core_app.validate(oApp);
   }
 
-  async main(req) {
-    const oReq = req.data.value;
-    const Client = require("./z2ui5_cl_core_client");
+  /** @deprecated Use z2ui5_cl_core_srv_model.main_json_to_attri. */
+  static _applyXxDelta(oApp, xx, requireOwnProp = false) {
+    return z2ui5_cl_core_srv_model.main_json_to_attri(oApp, xx, requireOwnProp);
+  }
+
+  /**
+   * Process a single roundtrip. `body` is the parsed request payload — exactly
+   * what the abap2UI5 ABAP handler receives on the wire (no CDS-action wrapping).
+   *
+   * Returns a JSON string — caller writes it as the HTTP response body.
+   */
+  async main(body) {
+    const oReq    = body;
+    const Client  = require("./z2ui5_cl_core_client");
+    const Action  = require("./z2ui5_cl_core_action");
     const oClient = new Client();
-    oClient.oReq = oReq;
+    oClient.oReq  = oReq;
 
-    let oApp = null;
+    // 1. Resolve app + rehydrate nav stack
+    let oApp = await Action.factory_main(oReq, oClient);
+    z2ui5_cl_core_app.validate(oApp);
 
-    // Check if we have a navigation request from a previous roundtrip
-    if (oClient._navTarget) {
-      oApp = oClient._navTarget;
-    }
-    // Try loading existing app from DB via ID
-    else if (oReq?.S_FRONT?.ID) {
-      oApp = await DB.loadApp(oReq.S_FRONT.ID);
-    }
-
-    // Fallback: create startup app
-    if (!oApp) {
-      const StartupApp = require("../../02/z2ui5_cl_app_startup");
-      oApp = new StartupApp();
-    }
-
-    // Validate: app must implement z2ui5_if_app
-    z2ui5_cl_core_handler._validateApp(oApp);
-
-    // Apply model data from frontend (two-way binding)
-    if (oReq.XX) {
-      for (const prop in oReq.XX) {
-        oApp[prop] = oReq.XX[prop];
-      }
-    }
-
+    // 2. Apply incoming model delta
+    z2ui5_cl_core_srv_model.main_json_to_attri(oApp, oReq.XX);
     oClient.oApp = oApp;
 
-    // Run the app's main method
-    await oApp.main(oClient);
-
-    // Handle navigation: if nav_app_call was used, run the target app
-    while (oClient._navTarget) {
-      const navApp = oClient._navTarget;
-      oClient._navTarget = null;
-      oClient._navStack.push(oApp);
-      oApp = navApp;
-
-      // Apply model data if any
-      if (oReq.XX) {
-        for (const prop in oReq.XX) {
-          if (oApp.hasOwnProperty(prop)) {
-            oApp[prop] = oReq.XX[prop];
-          }
-        }
-      }
-
-      // Validate: navigated app must implement z2ui5_if_app
-      z2ui5_cl_core_handler._validateApp(oApp);
-
-      oClient.oApp = oApp;
-      oClient.aBind = [];
-      oClient.S_VIEW = null;
-      oClient.S_VIEW_NEST = null;
-      oClient.S_VIEW_NEST2 = null;
-      oClient.S_MSG_TOAST = null;
-      oClient.S_MSG_BOX = null;
-      oClient.S_POPUP = null;
-      oClient.S_POPOVER = null;
-      oClient._follow_up_action = null;
-
+    // 3. Run main(), or short-circuit on the framework-intercepted nav-back event
+    //    (abap2UI5 client->_event_nav_app_leave — apps never see it).
+    if (oReq?.S_FRONT?.EVENT === Client.EVENT_NAV_APP_LEAVE) {
+      oClient.nav_app_leave();
+    } else {
       await oApp.main(oClient);
+      oApp.check_initialized = true;
     }
 
-    // Save app state to DB
-    const previousId = oReq?.S_FRONT?.ID || null;
-    const generatedId = await DB.saveApp(oApp, previousId);
+    // 4. Nav-loop: process any nav_app_call / nav_app_leave queued by main()
+    while (oClient._navTarget) {
+      const navApp  = oClient._navTarget;
+      const isLeave = oClient._navTargetIsLeave;
+      oClient._navTarget = null;
+      oClient._navTargetIsLeave = false;
 
-    // Save nav stack apps too (for back navigation)
-    if (oClient._navStack.length > 0) {
-      // Store the nav stack reference in the current app for later retrieval
-      oApp.__navStackIds = [];
-      for (const stackApp of oClient._navStack) {
-        const stackId = await DB.saveApp(stackApp, null);
-        oApp.__navStackIds.push(stackId);
-      }
-    }
-
-    // Build model from bindings
-    const oModel = { XX: {} };
-    for (const binding of oClient.aBind) {
-      if (binding.type === "BIND") {
-        oModel[binding.name] = binding.val;
+      // Forward navigation pushes the current app onto the stack so it can be
+      // popped later. Back navigation does NOT push — instead the leaving app
+      // is parked on _navPrev so the destination can read it via
+      // get_app_prev() (mirrors abap z2ui5_cl_core_action->o_app_leave).
+      if (isLeave) {
+        oClient._navPrev = oApp;
       } else {
-        oModel.XX[binding.name] = binding.val;
+        oClient._navStack.push(oApp);
       }
+
+      oApp = navApp;
+      oClient._check_on_navigated = true;
+
+      z2ui5_cl_core_app.reset_client_for_nav(oClient, oReq);
+      await z2ui5_cl_core_app.run(oApp, oClient, oReq, /*requireOwn=*/true);
     }
 
+    // 5. Persist app + nav stack
+    const previousId  = oReq?.S_FRONT?.ID || null;
+    const generatedId = await z2ui5_cl_core_app.db_save(oApp, oClient, previousId);
+
+    // 6. Build response
+    const oModel = z2ui5_cl_core_srv_model.main_json_stringify(oClient.aBind);
     const oResponse = {
       S_FRONT: {
         APP: oApp.constructor.name,
         ID: generatedId,
         PARAMS: {
           S_MSG_TOAST: oClient.S_MSG_TOAST || null,
-          S_MSG_BOX: oClient.S_MSG_BOX || null,
-          S_VIEW: oClient.S_VIEW || null,
+          S_MSG_BOX:   oClient.S_MSG_BOX   || null,
+          S_VIEW:      oClient.S_VIEW      || null,
           S_VIEW_NEST: oClient.S_VIEW_NEST || null,
           S_VIEW_NEST2: oClient.S_VIEW_NEST2 || null,
-          S_POPUP: oClient.S_POPUP || null,
-          S_POPOVER: oClient.S_POPOVER || null,
-          S_FOLLOW_UP_ACTION: oClient._follow_up_action || null,
-          S_PUSH_STATE: oClient._push_state !== undefined ? oClient._push_state : null,
+          S_POPUP:     oClient.S_POPUP     || null,
+          S_POPOVER:   oClient.S_POPOVER   || null,
+          S_FOLLOW_UP_ACTION: oClient._follow_up_actions.length
+            ? { CUSTOM_JS: oClient._follow_up_actions }
+            : null,
+          SET_PUSH_STATE:       oClient._push_state !== undefined ? oClient._push_state : null,
+          SET_APP_STATE_ACTIVE: oClient._app_state_active || null,
+          SET_NAV_BACK:         oClient._nav_back || null,
+          S_STATEFUL:           oClient._session_stateful ? { ACTIVE: true } : null,
         },
       },
       MODEL: oModel,

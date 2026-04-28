@@ -74,9 +74,12 @@ sap.ui.define(
 		},
 
 		async readHttp() {
-			// Fast path: native JSON.stringify is 10-50× faster than safeStringify (no replacer).
-			// Roundtrip bodies are structured data without cyclic refs in practice;
-			// safeStringify is only used as a defensive fallback if a cycle ever sneaks in.
+			// Backend is a CDS REST action: srv.on('z2ui5', …) on the rootService.
+			// The action declares one parameter `value : object`, so the request
+			// body must be wrapped as `{value: <oBody>}`. CDS unwraps and passes
+			// the inner body to z2ui5_cl_http_handler, which forwards to
+			// z2ui5_cl_core_handler — same wire shape abap2UI5's ICF servlet
+			// produces internally before its own dispatcher.
 			let body;
 			try {
 				body = JSON.stringify({ value: z2ui5.oBody });

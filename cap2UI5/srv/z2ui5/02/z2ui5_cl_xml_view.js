@@ -7,26 +7,74 @@ class z2ui5_cl_xml_view {
   name;
   ns;
   aProp = [];
+  _isPopup = false;  // root-only flag — toggled by factory_popup()
 
-  constructor() {
+  constructor(opts = {}) {
     this.oRoot = this;
+    this._isPopup = !!opts.popup;
+  }
+
+  /** Default: full XMLView root (for use with client.view_display). */
+  static factory() {
+    return new z2ui5_cl_xml_view();
+  }
+
+  /**
+   * Popup/Fragment root (for use with client.popup_display / popover_display).
+   * Frontend Fragment.load expects a <core:FragmentDefinition> root so it can
+   * return the wrapped Dialog/Popover (with .open()) directly — wrapping in
+   * <mvc:View> would return a View instance which has no .open() method.
+   */
+  static factory_popup() {
+    return new z2ui5_cl_xml_view({ popup: true });
   }
 
   // --- Core ---
 
+  _renderRootOpen() {
+    if (this._isPopup) {
+      return `<core:FragmentDefinition xmlns:m="sap.m" xmlns:core="sap.ui.core" xmlns:f="sap.f" xmlns:form="sap.ui.layout.form" xmlns:l="sap.ui.layout" xmlns:mvc="sap.ui.core.mvc" xmlns:table="sap.ui.table" xmlns:unified="sap.ui.unified" xmlns:upload="sap.m.upload" xmlns:uxap="sap.uxap" xmlns:z2ui5="z2ui5"`;
+    }
+    return `<mvc:View xmlns:m="sap.m" xmlns:core="sap.ui.core" xmlns:f="sap.f" xmlns:form="sap.ui.layout.form" xmlns:l="sap.ui.layout" xmlns:mvc="sap.ui.core.mvc" xmlns:table="sap.ui.table" xmlns:unified="sap.ui.unified" xmlns:upload="sap.m.upload" xmlns:uxap="sap.uxap" xmlns:z2ui5="z2ui5" displayBlock="true" height="100%"`;
+  }
+
+  _renderRootClose() {
+    return this._isPopup ? `</core:FragmentDefinition>` : `</mvc:View>`;
+  }
+
+  /**
+   * Escapes the 3 chars XML requires inside double-quoted attribute values.
+   * `>` and `'` are technically valid unescaped in this context per XML 1.0,
+   * so we leave them readable. UI5's XML parser unescapes the rest back during
+   * view parsing — URLs with `&`, expressions with `<` etc. survive the trip.
+   */
+  static _xmlAttrEscape(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // Always renders the full tree from the root, regardless of which node it's
+  // called on — so the abap-style chain `view = factory().Shell().Page(...)...;
+  // view.stringify()` produces the same output as keeping a separate root ref.
   stringify() {
+    return this.oRoot._renderXml();
+  }
+
+  _renderXml() {
+    let result;
     if (this === this.oRoot) {
-      var result = `<mvc:View xmlns:m="sap.m" xmlns:core="sap.ui.core" xmlns:f="sap.f" xmlns:form="sap.ui.layout.form" xmlns:l="sap.ui.layout" xmlns:mvc="sap.ui.core.mvc" xmlns:table="sap.ui.table" xmlns:unified="sap.ui.unified" xmlns:upload="sap.m.upload" displayBlock="true" height="100%"`;
+      result = this._renderRootOpen();
     } else {
       if (this.ns && this.ns !== "") {
         result = `<${this.ns}:${this.name} `;
       } else {
         result = `<${this.name} `;
       }
-
       for (const prop of this.aProp) {
         if (prop.v !== undefined && prop.v !== null) {
-          result += `${prop.n}="${prop.v}" `;
+          result += `${prop.n}="${z2ui5_cl_xml_view._xmlAttrEscape(prop.v)}" `;
         }
       }
     }
@@ -34,7 +82,7 @@ class z2ui5_cl_xml_view {
     if (this.aChild.length > 0) {
       result += `>`;
       for (const child of this.aChild) {
-        result += child.stringify();
+        result += child._renderXml();
       }
       if (this !== this.oRoot) {
         if (this.ns && this.ns !== "") {
@@ -48,7 +96,7 @@ class z2ui5_cl_xml_view {
     }
 
     if (this === this.oRoot) {
-      result += `</mvc:View>`;
+      result += this._renderRootClose();
     }
 
     return result;
@@ -56,6 +104,29 @@ class z2ui5_cl_xml_view {
 
   get_parent() {
     return this.oParent;
+  }
+
+  /**
+   * Returns a z2ui5_cl_xml_view_cc wrapper bound to this view — mirrors abap
+   * z2ui5_cl_xml_view->_z2ui5( ). Use as `view._z2ui5().info({...})`.
+   */
+  _z2ui5() {
+    const Cc = require("./z2ui5_cl_xml_view_cc");
+    return new Cc(this);
+  }
+
+  /**
+   * Returns the most recently added child — mirrors abap2UI5 z2ui5_cl_xml_view->get( ).
+   *
+   * Useful after a "leaf" call (Input, CheckBox, Button, …) which returns the
+   * parent for chaining; .get() then dives back into the just-created leaf so
+   * one can attach an aggregation. Example:
+   *
+   *   form.Input({ ..., suggestionItems: bind, showSuggestion: true })
+   *       .get().suggestionItems().ListItem({ ... });
+   */
+  get() {
+    return this.aChild[this.aChild.length - 1] || this;
   }
 
   generic(val) {
@@ -107,11 +178,12 @@ class z2ui5_cl_xml_view {
     });
   }
 
-  Page({ title, showNavButton, showHeader, navButtonPress, class: cssClass } = {}) {
+  Page({ id, title, showNavButton, showHeader, navButtonPress, class: cssClass } = {}) {
     return this._container({
       name: "Page",
       ns: "m",
       aProp: this._filterProps([
+        { n: "id", v: id },
         { n: "title", v: title },
         { n: "showNavButton", v: this.boolean_abap_2_json(showNavButton) },
         { n: "showHeader", v: this.boolean_abap_2_json(showHeader) },
@@ -262,9 +334,13 @@ class z2ui5_cl_xml_view {
   }
 
   content(props = {}) {
+    // Aggregations inherit the parent's namespace — Dialog/Page/Panel use "m",
+    // SimpleForm uses "form", uxap controls use "uxap", etc.
+    // Hardcoding ns="form" caused UI5 to try loading sap.ui.layout.form.content
+    // as a class when used inside a Dialog.
     return this._container({
       name: "content",
-      ns: "form",
+      ns: this.ns || "m",
       aProp: [],
     });
   }
@@ -326,10 +402,58 @@ class z2ui5_cl_xml_view {
     });
   }
 
+  footer(props = {}) {
+    return this._container({
+      name: "footer",
+      ns: "m",
+      aProp: [],
+    });
+  }
+
+  suggestionItems(props = {}) {
+    return this._container({
+      name: "suggestionItems",
+      ns: "m",
+      aProp: [],
+    });
+  }
+
+  contentLeft(props = {}) {
+    return this._container({
+      name: "contentLeft",
+      ns: "m",
+      aProp: [],
+    });
+  }
+
+  contentMiddle(props = {}) {
+    return this._container({
+      name: "contentMiddle",
+      ns: "m",
+      aProp: [],
+    });
+  }
+
+  contentRight(props = {}) {
+    return this._container({
+      name: "contentRight",
+      ns: "m",
+      aProp: [],
+    });
+  }
+
   subHeader(props = {}) {
     return this._container({
       name: "subHeader",
       ns: "m",
+      aProp: [],
+    });
+  }
+
+  headerToolbar(props = {}) {
+    return this._container({
+      name: "headerToolbar",
+      ns: this.ns || "m",
       aProp: [],
     });
   }
@@ -459,11 +583,12 @@ class z2ui5_cl_xml_view {
   // INPUT CONTROLS
   // ========================================================
 
-  Input({ value, placeholder, enabled, type, width, submit, valueState, valueStateText, showValueHelp, valueHelpRequest, description, editable, maxLength } = {}) {
+  Input({ id, value, placeholder, enabled, type, width, submit, valueState, valueStateText, showValueHelp, valueHelpRequest, description, editable, maxLength, suggestionItems, showSuggestion } = {}) {
     this.generic({
       name: "Input",
       ns: "m",
       aProp: this._filterProps([
+        { n: "id", v: id },
         { n: "value", v: value },
         { n: "placeholder", v: placeholder },
         { n: "enabled", v: this.boolean_abap_2_json(enabled) },
@@ -477,6 +602,8 @@ class z2ui5_cl_xml_view {
         { n: "description", v: description },
         { n: "editable", v: this.boolean_abap_2_json(editable) },
         { n: "maxLength", v: maxLength },
+        { n: "suggestionItems", v: suggestionItems },
+        { n: "showSuggestion", v: this.boolean_abap_2_json(showSuggestion) },
       ]),
     });
     return this;
@@ -575,7 +702,7 @@ class z2ui5_cl_xml_view {
     return this;
   }
 
-  Switch({ state, change, type, enabled } = {}) {
+  Switch({ state, change, type, enabled, customTextOn, customTextOff } = {}) {
     this.generic({
       name: "Switch",
       ns: "m",
@@ -584,6 +711,8 @@ class z2ui5_cl_xml_view {
         { n: "change", v: change },
         { n: "type", v: type },
         { n: "enabled", v: this.boolean_abap_2_json(enabled) },
+        { n: "customTextOn", v: customTextOn },
+        { n: "customTextOff", v: customTextOff },
       ]),
     });
     return this;
@@ -639,6 +768,19 @@ class z2ui5_cl_xml_view {
       aProp: this._filterProps([
         { n: "key", v: key },
         { n: "text", v: text },
+      ]),
+    });
+    return this;
+  }
+
+  ListItem({ text, additionalText, icon } = {}) {
+    this.generic({
+      name: "ListItem",
+      ns: "core",
+      aProp: this._filterProps([
+        { n: "text", v: text },
+        { n: "additionalText", v: additionalText },
+        { n: "icon", v: icon },
       ]),
     });
     return this;
@@ -871,16 +1013,18 @@ class z2ui5_cl_xml_view {
   // DIALOG / POPUP
   // ========================================================
 
-  Dialog({ title, type, state, contentWidth, contentHeight, draggable, resizable, stretch, afterClose } = {}) {
+  Dialog({ title, icon, type, state, contentWidth, contentHeight, verticalScrolling, draggable, resizable, stretch, afterClose } = {}) {
     return this._container({
       name: "Dialog",
       ns: "m",
       aProp: this._filterProps([
         { n: "title", v: title },
+        { n: "icon", v: icon },
         { n: "type", v: type },
         { n: "state", v: state },
         { n: "contentWidth", v: contentWidth },
         { n: "contentHeight", v: contentHeight },
+        { n: "verticalScrolling", v: this.boolean_abap_2_json(verticalScrolling) },
         { n: "draggable", v: this.boolean_abap_2_json(draggable) },
         { n: "resizable", v: this.boolean_abap_2_json(resizable) },
         { n: "stretch", v: this.boolean_abap_2_json(stretch) },
@@ -889,10 +1033,29 @@ class z2ui5_cl_xml_view {
     });
   }
 
+  TableSelectDialog({ title, items, cancel, search, confirm, growing, contentWidth, contentHeight, growingThreshold, multiSelect } = {}) {
+    return this._container({
+      name: "TableSelectDialog",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "title", v: title },
+        { n: "items", v: items },
+        { n: "cancel", v: cancel },
+        { n: "search", v: search },
+        { n: "confirm", v: confirm },
+        { n: "growing", v: this.boolean_abap_2_json(growing) },
+        { n: "contentWidth", v: contentWidth },
+        { n: "contentHeight", v: contentHeight },
+        { n: "growingThreshold", v: growingThreshold },
+        { n: "multiSelect", v: this.boolean_abap_2_json(multiSelect) },
+      ]),
+    });
+  }
+
   buttons(props = {}) {
     return this._container({
       name: "buttons",
-      ns: "",
+      ns: this.ns || "m",
       aProp: [],
     });
   }
@@ -900,7 +1063,7 @@ class z2ui5_cl_xml_view {
   beginButton(props = {}) {
     return this._container({
       name: "beginButton",
-      ns: "",
+      ns: this.ns || "m",
       aProp: [],
     });
   }
@@ -908,7 +1071,7 @@ class z2ui5_cl_xml_view {
   endButton(props = {}) {
     return this._container({
       name: "endButton",
-      ns: "",
+      ns: this.ns || "m",
       aProp: [],
     });
   }
@@ -1057,23 +1220,23 @@ class z2ui5_cl_xml_view {
   }
 
   header(props = {}) {
-    return this._container({ name: "header", ns: "f", aProp: [] });
+    return this._container({ name: "header", ns: this.ns || "m", aProp: [] });
   }
 
   heading(props = {}) {
-    return this._container({ name: "heading", ns: "", aProp: [] });
+    return this._container({ name: "heading", ns: this.ns || "m", aProp: [] });
   }
 
   expandedHeading(props = {}) {
-    return this._container({ name: "expandedHeading", ns: "", aProp: [] });
+    return this._container({ name: "expandedHeading", ns: this.ns || "m", aProp: [] });
   }
 
   snappedHeading(props = {}) {
-    return this._container({ name: "snappedHeading", ns: "", aProp: [] });
+    return this._container({ name: "snappedHeading", ns: this.ns || "m", aProp: [] });
   }
 
   actions(props = {}) {
-    return this._container({ name: "actions", ns: "", aProp: [] });
+    return this._container({ name: "actions", ns: this.ns || "m", aProp: [] });
   }
 
   // ========================================================
@@ -1108,6 +1271,491 @@ class z2ui5_cl_xml_view {
       aProp: aProp,
     });
     return this;
+  }
+
+  // ========================================================
+  // OBJECT PAGE LAYOUT (uxap namespace)
+  // ========================================================
+
+  ObjectPageLayout({ showTitleInHeaderContent, upperCaseAnchorBar, useIconTabBar } = {}) {
+    return this._container({
+      name: "ObjectPageLayout",
+      ns: "uxap",
+      aProp: this._filterProps([
+        { n: "showTitleInHeaderContent", v: this.boolean_abap_2_json(showTitleInHeaderContent) },
+        { n: "upperCaseAnchorBar", v: this.boolean_abap_2_json(upperCaseAnchorBar) },
+        { n: "useIconTabBar", v: this.boolean_abap_2_json(useIconTabBar) },
+      ]),
+    });
+  }
+
+  ObjectPageSection({ title, titleUppercase } = {}) {
+    return this._container({
+      name: "ObjectPageSection",
+      ns: "uxap",
+      aProp: this._filterProps([
+        { n: "title", v: title },
+        { n: "titleUppercase", v: this.boolean_abap_2_json(titleUppercase) },
+      ]),
+    });
+  }
+
+  ObjectPageSubSection({ title } = {}) {
+    return this._container({
+      name: "ObjectPageSubSection",
+      ns: "uxap",
+      aProp: this._filterProps([{ n: "title", v: title }]),
+    });
+  }
+
+  // ========================================================
+  // ILLUSTRATED + MESSAGE
+  // ========================================================
+
+  IllustratedMessage({ illustrationType, illustrationSize, title, description, enableVerticalResponsiveness, enableFormattedText } = {}) {
+    return this._container({
+      name: "IllustratedMessage",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "illustrationType", v: illustrationType },
+        { n: "illustrationSize", v: illustrationSize },
+        { n: "title", v: title },
+        { n: "description", v: description },
+        { n: "enableVerticalResponsiveness", v: this.boolean_abap_2_json(enableVerticalResponsiveness) },
+        { n: "enableFormattedText", v: this.boolean_abap_2_json(enableFormattedText) },
+      ]),
+    });
+  }
+
+  MessagePopover({ items, headerButton, asyncDescriptionHandler } = {}) {
+    return this._container({
+      name: "MessagePopover",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "items", v: items },
+        { n: "headerButton", v: headerButton },
+        { n: "asyncDescriptionHandler", v: asyncDescriptionHandler },
+      ]),
+    });
+  }
+
+  MessageView({ items, asyncDescriptionHandler } = {}) {
+    return this._container({
+      name: "MessageView",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "items", v: items },
+        { n: "asyncDescriptionHandler", v: asyncDescriptionHandler },
+      ]),
+    });
+  }
+
+  MessagePage({ title, text, description, icon, showHeader, showNavButton, navButtonPress } = {}) {
+    return this._container({
+      name: "MessagePage",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "title", v: title },
+        { n: "text", v: text },
+        { n: "description", v: description },
+        { n: "icon", v: icon },
+        { n: "showHeader", v: this.boolean_abap_2_json(showHeader) },
+        { n: "showNavButton", v: this.boolean_abap_2_json(showNavButton) },
+        { n: "navButtonPress", v: navButtonPress },
+      ]),
+    });
+  }
+
+  MessageItem({ type, title, subtitle, description, longtextUrl, groupName, counter, activeTitle } = {}) {
+    return this._leaf({
+      name: "MessageItem",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "type", v: type },
+        { n: "title", v: title },
+        { n: "subtitle", v: subtitle },
+        { n: "description", v: description },
+        { n: "longtextUrl", v: longtextUrl },
+        { n: "groupName", v: groupName },
+        { n: "counter", v: counter },
+        { n: "activeTitle", v: this.boolean_abap_2_json(activeTitle) },
+      ]),
+    });
+  }
+
+  // ========================================================
+  // TABLES (advanced — sap.ui.table namespace)
+  // ========================================================
+
+  AnalyticalTable({ rows, selectionMode, visibleRowCount, threshold, enableColumnReordering, enableGrouping, enableSelectAll } = {}) {
+    return this._container({
+      name: "AnalyticalTable",
+      ns: "table",
+      aProp: this._filterProps([
+        { n: "rows", v: rows },
+        { n: "selectionMode", v: selectionMode },
+        { n: "visibleRowCount", v: visibleRowCount },
+        { n: "threshold", v: threshold },
+        { n: "enableColumnReordering", v: this.boolean_abap_2_json(enableColumnReordering) },
+        { n: "enableGrouping", v: this.boolean_abap_2_json(enableGrouping) },
+        { n: "enableSelectAll", v: this.boolean_abap_2_json(enableSelectAll) },
+      ]),
+    });
+  }
+
+  TreeTable({ rows, selectionMode, visibleRowCount, threshold, enableColumnReordering } = {}) {
+    return this._container({
+      name: "TreeTable",
+      ns: "table",
+      aProp: this._filterProps([
+        { n: "rows", v: rows },
+        { n: "selectionMode", v: selectionMode },
+        { n: "visibleRowCount", v: visibleRowCount },
+        { n: "threshold", v: threshold },
+        { n: "enableColumnReordering", v: this.boolean_abap_2_json(enableColumnReordering) },
+      ]),
+    });
+  }
+
+  // ========================================================
+  // TILES
+  // ========================================================
+
+  GenericTile({ header, subheader, frameType, press, mode, state, scope, class: cssClass } = {}) {
+    return this._container({
+      name: "GenericTile",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "header", v: header },
+        { n: "subheader", v: subheader },
+        { n: "frameType", v: frameType },
+        { n: "press", v: press },
+        { n: "mode", v: mode },
+        { n: "state", v: state },
+        { n: "scope", v: scope },
+        { n: "class", v: cssClass },
+      ]),
+    });
+  }
+
+  TileContent({ unit, footer, footerColor } = {}) {
+    return this._container({
+      name: "TileContent",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "unit", v: unit },
+        { n: "footer", v: footer },
+        { n: "footerColor", v: footerColor },
+      ]),
+    });
+  }
+
+  NumericContent({ value, scale, indicator, valueColor, icon, withMargin, animateTextChange } = {}) {
+    return this._leaf({
+      name: "NumericContent",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "value", v: value },
+        { n: "scale", v: scale },
+        { n: "indicator", v: indicator },
+        { n: "valueColor", v: valueColor },
+        { n: "icon", v: icon },
+        { n: "withMargin", v: this.boolean_abap_2_json(withMargin) },
+        { n: "animateTextChange", v: this.boolean_abap_2_json(animateTextChange) },
+      ]),
+    });
+  }
+
+  ImageContent({ src, description, press } = {}) {
+    return this._leaf({
+      name: "ImageContent",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "src", v: src },
+        { n: "description", v: description },
+        { n: "press", v: press },
+      ]),
+    });
+  }
+
+  // ========================================================
+  // AVATAR GROUP
+  // ========================================================
+
+  AvatarGroup({ groupType, items, press } = {}) {
+    return this._container({
+      name: "AvatarGroup",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "groupType", v: groupType },
+        { n: "items", v: items },
+        { n: "press", v: press },
+      ]),
+    });
+  }
+
+  AvatarGroupItem({ src, initials, fallbackIcon } = {}) {
+    return this._leaf({
+      name: "AvatarGroupItem",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "src", v: src },
+        { n: "initials", v: initials },
+        { n: "fallbackIcon", v: fallbackIcon },
+      ]),
+    });
+  }
+
+  // ========================================================
+  // TAB CONTAINER + CAROUSEL + WIZARD
+  // ========================================================
+
+  TabContainer({ items, itemSelect, itemClose, addNewButtonPress, showAddNewButton } = {}) {
+    return this._container({
+      name: "TabContainer",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "items", v: items },
+        { n: "itemSelect", v: itemSelect },
+        { n: "itemClose", v: itemClose },
+        { n: "addNewButtonPress", v: addNewButtonPress },
+        { n: "showAddNewButton", v: this.boolean_abap_2_json(showAddNewButton) },
+      ]),
+    });
+  }
+
+  TabContainerItem({ name, key, icon, modified } = {}) {
+    return this._container({
+      name: "TabContainerItem",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "name", v: name },
+        { n: "key", v: key },
+        { n: "icon", v: icon },
+        { n: "modified", v: this.boolean_abap_2_json(modified) },
+      ]),
+    });
+  }
+
+  Carousel({ pages, activePage, pageChanged, loop, showPageIndicator } = {}) {
+    return this._container({
+      name: "Carousel",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "pages", v: pages },
+        { n: "activePage", v: activePage },
+        { n: "pageChanged", v: pageChanged },
+        { n: "loop", v: this.boolean_abap_2_json(loop) },
+        { n: "showPageIndicator", v: this.boolean_abap_2_json(showPageIndicator) },
+      ]),
+    });
+  }
+
+  Wizard({ steps, complete, currentStep, showNextButton, finishButtonText } = {}) {
+    return this._container({
+      name: "Wizard",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "steps", v: steps },
+        { n: "complete", v: complete },
+        { n: "currentStep", v: currentStep },
+        { n: "showNextButton", v: this.boolean_abap_2_json(showNextButton) },
+        { n: "finishButtonText", v: finishButtonText },
+      ]),
+    });
+  }
+
+  WizardStep({ title, validated, complete, activate } = {}) {
+    return this._container({
+      name: "WizardStep",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "title", v: title },
+        { n: "validated", v: this.boolean_abap_2_json(validated) },
+        { n: "complete", v: complete },
+        { n: "activate", v: activate },
+      ]),
+    });
+  }
+
+  // ========================================================
+  // LAYOUT DATA
+  // ========================================================
+
+  FlexItemData({ growFactor, shrinkFactor, baseSize, alignSelf, order, styleClass } = {}) {
+    return this._leaf({
+      name: "FlexItemData",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "growFactor", v: growFactor },
+        { n: "shrinkFactor", v: shrinkFactor },
+        { n: "baseSize", v: baseSize },
+        { n: "alignSelf", v: alignSelf },
+        { n: "order", v: order },
+        { n: "styleClass", v: styleClass },
+      ]),
+    });
+  }
+
+  GridData({ span, indent, linebreak, visibleL, visibleM, visibleS } = {}) {
+    return this._leaf({
+      name: "GridData",
+      ns: "l",
+      aProp: this._filterProps([
+        { n: "span", v: span },
+        { n: "indent", v: indent },
+        { n: "linebreak", v: this.boolean_abap_2_json(linebreak) },
+        { n: "visibleL", v: this.boolean_abap_2_json(visibleL) },
+        { n: "visibleM", v: this.boolean_abap_2_json(visibleM) },
+        { n: "visibleS", v: this.boolean_abap_2_json(visibleS) },
+      ]),
+    });
+  }
+
+  // ========================================================
+  // MENU + MORE BUTTONS
+  // ========================================================
+
+  MenuButton({ text, icon, type, defaultAction, menuPosition, useDefaultActionOnly } = {}) {
+    return this._container({
+      name: "MenuButton",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "text", v: text },
+        { n: "icon", v: icon },
+        { n: "type", v: type },
+        { n: "defaultAction", v: defaultAction },
+        { n: "menuPosition", v: menuPosition },
+        { n: "useDefaultActionOnly", v: this.boolean_abap_2_json(useDefaultActionOnly) },
+      ]),
+    });
+  }
+
+  Menu({ items, itemSelected } = {}) {
+    return this._container({
+      name: "Menu",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "items", v: items },
+        { n: "itemSelected", v: itemSelected },
+      ]),
+    });
+  }
+
+  MenuItem({ text, icon, press, enabled } = {}) {
+    return this._container({
+      name: "MenuItem",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "text", v: text },
+        { n: "icon", v: icon },
+        { n: "press", v: press },
+        { n: "enabled", v: this.boolean_abap_2_json(enabled) },
+      ]),
+    });
+  }
+
+  BarcodeScannerButton({ scanSuccess, scanFail, dialogTitle, type, provideFallback } = {}) {
+    return this._leaf({
+      name: "BarcodeScannerButton",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "scanSuccess", v: scanSuccess },
+        { n: "scanFail", v: scanFail },
+        { n: "dialogTitle", v: dialogTitle },
+        { n: "type", v: type },
+        { n: "provideFallback", v: this.boolean_abap_2_json(provideFallback) },
+      ]),
+    });
+  }
+
+  // ========================================================
+  // MULTI INPUT + TOKENS
+  // ========================================================
+
+  MultiInput({ value, valueState, valueStateText, tokens, suggestionItems, tokenUpdate, submit, change, placeholder, enabled } = {}) {
+    return this._container({
+      name: "MultiInput",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "value", v: value },
+        { n: "valueState", v: valueState },
+        { n: "valueStateText", v: valueStateText },
+        { n: "tokens", v: tokens },
+        { n: "suggestionItems", v: suggestionItems },
+        { n: "tokenUpdate", v: tokenUpdate },
+        { n: "submit", v: submit },
+        { n: "change", v: change },
+        { n: "placeholder", v: placeholder },
+        { n: "enabled", v: this.boolean_abap_2_json(enabled) },
+      ]),
+    });
+  }
+
+  Token({ key, text, editable, selected } = {}) {
+    return this._leaf({
+      name: "Token",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "key", v: key },
+        { n: "text", v: text },
+        { n: "editable", v: this.boolean_abap_2_json(editable) },
+        { n: "selected", v: this.boolean_abap_2_json(selected) },
+      ]),
+    });
+  }
+
+  // ========================================================
+  // BAR + BREADCRUMBS
+  // ========================================================
+
+  Bar({ contentLeft, contentMiddle, contentRight, design, translucent } = {}) {
+    return this._container({
+      name: "Bar",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "contentLeft", v: contentLeft },
+        { n: "contentMiddle", v: contentMiddle },
+        { n: "contentRight", v: contentRight },
+        { n: "design", v: design },
+        { n: "translucent", v: this.boolean_abap_2_json(translucent) },
+      ]),
+    });
+  }
+
+  Breadcrumbs({ links, currentLocationText, separatorStyle } = {}) {
+    return this._container({
+      name: "Breadcrumbs",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "links", v: links },
+        { n: "currentLocationText", v: currentLocationText },
+        { n: "separatorStyle", v: separatorStyle },
+      ]),
+    });
+  }
+
+  RangeSlider({ min, max, step, startValue, endValue, value, value2, showTickmarks, labelInterval, width, change, enabled, class: cssClass } = {}) {
+    return this._leaf({
+      name: "RangeSlider",
+      ns: "m",
+      aProp: this._filterProps([
+        { n: "min", v: min },
+        { n: "max", v: max },
+        { n: "step", v: step },
+        { n: "startValue", v: startValue },
+        { n: "endValue", v: endValue },
+        { n: "value", v: value },
+        { n: "value2", v: value2 },
+        { n: "showTickmarks", v: this.boolean_abap_2_json(showTickmarks) },
+        { n: "enableTickmarks", v: this.boolean_abap_2_json(showTickmarks) },
+        { n: "labelInterval", v: labelInterval },
+        { n: "width", v: width },
+        { n: "change", v: change },
+        { n: "enabled", v: this.boolean_abap_2_json(enabled) },
+        { n: "class", v: cssClass },
+      ]),
+    });
   }
 }
 

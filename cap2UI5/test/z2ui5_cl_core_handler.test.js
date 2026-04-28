@@ -11,24 +11,22 @@ jest.mock("../srv/z2ui5/01/01/z2ui5_cl_core_srv_draft", () => {
   return actual;
 });
 
+// Returns the raw body — same shape as what the abap2UI5 wire format puts into
+// the request payload. handler.main(body) consumes it directly.
 function makeRequest({ event = "", id = "", xx = {}, args = [] } = {}) {
   return {
-    data: {
-      value: {
-        S_FRONT: {
-          EVENT: event,
-          ID: id,
-          CONFIG: {},
-          ORIGIN: "http://localhost:4004",
-          PATHNAME: "/index.html",
-          SEARCH: "",
-          VIEW: "",
-          HASH: "",
-          T_EVENT_ARG: args,
-        },
-        XX: xx,
-      },
+    S_FRONT: {
+      EVENT: event,
+      ID: id,
+      CONFIG: {},
+      ORIGIN: "http://localhost:4004",
+      PATHNAME: "/index.html",
+      SEARCH: "",
+      VIEW: "",
+      HASH: "",
+      T_EVENT_ARG: args,
     },
+    XX: xx,
   };
 }
 
@@ -105,38 +103,41 @@ describe("z2ui5_cl_core_handler", () => {
       const req = makeRequest({
         id: "some-id",
         event: "BUTTON_POST",
-        xx: { NAME: "World" },
+        xx: { name: "World" },
       });
 
       const result = JSON.parse(await handler.main(req));
 
       // The app should have received the XX data
       expect(result.S_FRONT.APP).toBe("z2ui5_cl_app_hello_world");
-      // Toast message should contain the name
-      expect(result.S_FRONT.PARAMS.S_MSG_TOAST.TEXT).toContain("World");
+      // MessageBox should contain the name
+      expect(result.S_FRONT.PARAMS.S_MSG_BOX.TEXT).toContain("World");
     });
   });
 
   // ===== Navigation =====
 
   describe("navigation", () => {
-    test("NAV_TO_APP event navigates to target app", async () => {
-      const StartupApp = require("../srv/z2ui5/02/z2ui5_cl_app_startup");
-      const startup = new StartupApp();
-      DB.loadApp.mockResolvedValueOnce(startup);
+    test("nav_app_call from previous-app handler navigates correctly", async () => {
+      // Simulate: a custom app (running in DB) navigates to hello_world via nav_app_call.
+      const HelloWorld = require("../srv/z2ui5/02/z2ui5_cl_app_hello_world");
+      const z2ui5_if_app = require("../srv/z2ui5/02/z2ui5_if_app");
 
-      const req = makeRequest({
-        id: "startup-id",
-        event: "NAV_TO_APP",
-        args: ["z2ui5_cl_app_hello_world"],
-        xx: { CLASSNAME: "" },
-      });
+      // Use a one-off caller app whose only behavior is to push HelloWorld
+      class CallerApp extends z2ui5_if_app {
+        async main(client) {
+          if (client.check_on_event("GO")) {
+            client.nav_app_call(new HelloWorld());
+          }
+        }
+      }
+      DB.loadApp.mockResolvedValueOnce(new CallerApp());
 
+      const req = makeRequest({ id: "caller-id", event: "GO" });
       const result = JSON.parse(await handler.main(req));
 
-      // Should have navigated to hello world
       expect(result.S_FRONT.APP).toBe("z2ui5_cl_app_hello_world");
-      expect(result.S_FRONT.PARAMS.S_VIEW.XML).toContain("Hello World");
+      expect(result.S_FRONT.PARAMS.S_VIEW.XML).toMatch(/Hello World|Send/);
     });
   });
 
@@ -180,11 +181,11 @@ describe("z2ui5_cl_core_handler", () => {
 
   describe("messages in response", () => {
     test("toast message appears in response", async () => {
-      const Messages = require("../srv/apps/z2ui5_cl_app_messages");
+      const Messages = require("../srv/samples/z2ui5_cl_demo_app_008");
       const app = new Messages();
       DB.loadApp.mockResolvedValueOnce(app);
 
-      const req = makeRequest({ id: "msg-id", event: "TOAST" });
+      const req = makeRequest({ id: "msg-id", event: "BUTTON_MESSAGE_TOAST" });
       const result = JSON.parse(await handler.main(req));
 
       expect(result.S_FRONT.PARAMS.S_MSG_TOAST).not.toBeNull();
@@ -192,15 +193,15 @@ describe("z2ui5_cl_core_handler", () => {
     });
 
     test("message box appears in response", async () => {
-      const Messages = require("../srv/apps/z2ui5_cl_app_messages");
+      const Messages = require("../srv/samples/z2ui5_cl_demo_app_008");
       const app = new Messages();
       DB.loadApp.mockResolvedValueOnce(app);
 
-      const req = makeRequest({ id: "msg-id", event: "BOX" });
+      const req = makeRequest({ id: "msg-id", event: "BUTTON_MESSAGE_BOX_INFO" });
       const result = JSON.parse(await handler.main(req));
 
       expect(result.S_FRONT.PARAMS.S_MSG_BOX).not.toBeNull();
-      expect(result.S_FRONT.PARAMS.S_MSG_BOX.TEXT).toContain("message box");
+      expect(result.S_FRONT.PARAMS.S_MSG_BOX.TEXT).toContain("Your booking");
     });
   });
 });

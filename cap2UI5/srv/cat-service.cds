@@ -13,12 +13,13 @@ service AdminService {
 }
 
 
-
+// REST-protocol service: the z2ui5 action is the single roundtrip endpoint.
+// Mounted at /rest/root/z2ui5 — frontends POST `{value: <oBody>}`.
 @protocol: 'rest'
 service rootService {
 
     @open
     type object {};
-    action z2ui5( value : object ) returns object;
+    action z2ui5(value : object) returns object;
 
 }

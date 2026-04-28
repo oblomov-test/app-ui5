@@ -114,7 +114,7 @@ sap.ui.define(
 			},
 
 			STORE_DATA(args) {
-				const { TYPE, PREFIX, VALUE, KEY } = args[1];
+				const { TYPE, PREFIX, VALUE, KEY } = ensureObj(args[1]);
 				try {
 					const oStorage = new Storage(Storage.Type[TYPE] ?? Storage.Type.session, PREFIX);
 					if (VALUE === "" || VALUE == null) {
@@ -137,7 +137,8 @@ sap.ui.define(
 
 			CROSS_APP_NAV_TO_EXT(args) {
 				withCrossAppNavigator((nav) => {
-					const hash = nav.hrefForExternal({ target: args[1], params: args[2] }) ?? "";
+					const params = ensureObj(args[2]);
+					const hash = nav.hrefForExternal({ target: args[1], params }) ?? "";
 					if (args[3] === "EXT") {
 						_URLHelper.redirect(`${window.location.href.split("#")[0]}${hash}`, true);
 					} else {
@@ -193,7 +194,7 @@ sap.ui.define(
 			},
 
 			URLHELPER(args) {
-				const params = args[2];
+				const params = ensureObj(args[2]);
 				const handlers = {
 					REDIRECT: () => _URLHelper.redirect(params.URL, params.NEW_WINDOW),
 					TRIGGER_EMAIL: () =>
@@ -243,15 +244,31 @@ sap.ui.define(
 			}
 		};
 
+		// Backend convenience methods on the server (storage_set, url_helper_*, cross_app_nav_to_ext)
+		// JSON-encode their object arguments because S_FOLLOW_UP_ACTION.CUSTOM_JS strings can only
+		// carry apostrophe-tokenized scalars. Coerce string → object here so XML-driven calls (which
+		// still pass real objects) and backend-driven calls (which pass strings) both work.
+		const ensureObj = (v) => (typeof v === "string" ? JSON.parse(v) : v);
+
 		return {
 			dispatch(args, controller) {
-				const navLookup = navContainerLookups[args[0]];
+				// Normalise the two call shapes:
+				//   .eF('ACTION', extra1, extra2)         → args = ['ACTION', extra1, extra2]
+				//   .eF(['ACTION', arg1, arg2], extra1)   → args = [['ACTION', arg1, arg2], extra1]
+				// The second form (used by _event_client when there are args) puts everything
+				// into the first array. We flatten so handlers see a single args list with
+				// args[0] = action name, args[1..] = action args.
+				const flat = Array.isArray(args[0])
+					? [...args[0], ...args.slice(1)]
+					: args;
+
+				const navLookup = navContainerLookups[flat[0]];
 				if (navLookup) {
-					navigateContainer(navLookup, args);
+					navigateContainer(navLookup, flat);
 					return;
 				}
-				const handler = ACTIONS[args[0]];
-				if (handler) handler(args, controller);
+				const handler = ACTIONS[flat[0]];
+				if (handler) handler(flat, controller);
 			},
 		};
 	},

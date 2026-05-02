@@ -152,13 +152,11 @@ describe("z2ui5_cl_core_handler", () => {
       expect(result.S_FRONT).toHaveProperty("APP");
       expect(result.S_FRONT).toHaveProperty("ID");
       expect(result.S_FRONT).toHaveProperty("PARAMS");
-      expect(result.S_FRONT.PARAMS).toHaveProperty("S_MSG_TOAST");
-      expect(result.S_FRONT.PARAMS).toHaveProperty("S_MSG_BOX");
+      // PARAMS only contains the slots that were actually set this roundtrip
+      // — abap mirror, response_abap_to_json drops null/empty entries via
+      // z2ui5_cl_util_json_fltr=>create_no_empty_values. The startup app
+      // displays a view, so S_VIEW must be present; the rest stay absent.
       expect(result.S_FRONT.PARAMS).toHaveProperty("S_VIEW");
-      expect(result.S_FRONT.PARAMS).toHaveProperty("S_POPUP");
-      expect(result.S_FRONT.PARAMS).toHaveProperty("S_POPOVER");
-      expect(result.S_FRONT.PARAMS).toHaveProperty("S_VIEW_NEST");
-      expect(result.S_FRONT.PARAMS).toHaveProperty("S_VIEW_NEST2");
     });
 
     test("response has MODEL with XX", async () => {

@@ -12,8 +12,8 @@ const z2ui5_cl_core_handler = require("../01/02/z2ui5_cl_core_handler");
  */
 module.exports = async function service(req) {
   const oBody = req?.data?.value ?? req?.data ?? req;
-  const oHandler = new z2ui5_cl_core_handler();
-  const responseJson = await oHandler.main(oBody);
+  const oHandler = new z2ui5_cl_core_handler(oBody);
+  const responseJson = await oHandler.main();
   // core_handler returns a JSON string for the abap-equivalent wire shape;
   // CDS will JSON.stringify whatever we return, so parse first to avoid double-encoding.
   return JSON.parse(responseJson);

@@ -141,13 +141,13 @@ class z2ui5_cl_core_handler {
         li_app.check_initialized = true;
       }
     } catch (lx) {
-      // abap wraps in z2ui5_cx_util_error and routes to pop_error. JS port
-      // preserves the original error and continues to nav-leave so the
-      // user gets a recoverable session.
+      // 1:1 with abap: wrap, then nav_app_leave to a freshly-instantiated
+      // pop_error popup. The popup is rendered on the next iteration of the
+      // nav-loop and the user gets a "OK" button to dismiss + recover.
       const z2ui5_cx_util_error = require("../../00/03/z2ui5_cx_util_error");
-      const wrapped = new z2ui5_cx_util_error(`UNCAUGHT EXCEPTION - Please Restart App: ${lx?.message || lx}`, lx);
-      oClient.message_box_display(wrapped.get_text(), `error`, `Error`);
-      oClient.nav_app_leave();
+      const z2ui5_cl_pop_error  = require("../../02/01/z2ui5_cl_pop_error");
+      const wrapped = new z2ui5_cx_util_error(`UNCAUGHT EXCEPTION - Please Restart App:`, lx);
+      oClient.nav_app_leave(z2ui5_cl_pop_error.factory({ x_root: wrapped }));
     }
 
     // Persist client state back onto mo_action so the loop iteration can read it.

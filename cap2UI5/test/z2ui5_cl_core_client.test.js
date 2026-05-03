@@ -432,8 +432,10 @@ describe("z2ui5_cl_core_client", () => {
       expect(client.get_app()).toBe(mockApp);
     });
 
-    test("get_app with id returns null (not yet implemented)", () => {
-      expect(client.get_app("some-id")).toBeNull();
+    test("get_app with id returns null when DB lookup fails", async () => {
+      // db_load is async + guarded — when CDS isn't initialised in the test
+      // env it falls back to null instead of crashing.
+      await expect(client.get_app("some-id")).resolves.toBeNull();
     });
 
     test("get_app_prev returns last item from nav stack", () => {

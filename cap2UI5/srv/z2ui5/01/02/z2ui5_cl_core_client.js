@@ -251,8 +251,19 @@ class z2ui5_cl_core_client {
     this._follow_up_actions.push(val);
   }
 
-  // --- Frontend Action Convenience Methods (Phase 2) ---
-  // Each builds a properly-escaped eF call and queues it via follow_up_action.
+  // ============================================================
+  //  JS-only ergonomic wrappers
+  //
+  //  These methods do NOT exist on the abap2UI5 z2ui5_if_client interface.
+  //  They are convenience helpers that build a `.eF([…])` follow-up action
+  //  string and call follow_up_action(). In ABAP one would write:
+  //
+  //     client->follow_up_action( |.eF(['CLIPBOARD_COPY','{ text }'])| ).
+  //
+  //  Apps that want to stay 1:1 with abap should call follow_up_action()
+  //  directly with the same string. The wrappers below stay because they
+  //  prevent escape bugs on common operations (clipboard, file dl, urls).
+  // ============================================================
 
   /** Copy text to the user's clipboard. */
   clipboard_copy(text) {
@@ -561,9 +572,26 @@ class z2ui5_cl_core_client {
   // the destination.
   _navTargetIsLeave = false;
 
+  /**
+   * Mints an id_app on the target nav app if missing — mirrors abap private
+   * helper nav_app_set_id. Throws on null target like abap does.
+   */
+  nav_app_set_id(app) {
+    if (!app) {
+      const z2ui5_cx_util_error = require("../../00/03/z2ui5_cx_util_error");
+      throw new z2ui5_cx_util_error(`NAV_APP_LEAVE_TO_INITIAL_APP_ERROR`);
+    }
+    if (!app.id_app) {
+      const z2ui5_cl_util = require("../../00/03/z2ui5_cl_util");
+      app.id_app = z2ui5_cl_util.uuid_get_c32();
+    }
+    return app.id_app;
+  }
+
   nav_app_call(appInstance) {
     this._navTarget = appInstance;
     this._navTargetIsLeave = false;
+    return this.nav_app_set_id(appInstance);
   }
 
   nav_app_leave(app) {
@@ -576,14 +604,17 @@ class z2ui5_cl_core_client {
       const StartupApp = require("../../02/z2ui5_cl_app_startup");
       this._navTarget = new StartupApp();
     }
+    return this.nav_app_set_id(this._navTarget);
   }
 
+  /** JS-only convenience — abap apps would use nav_app_call(NEW startup()). */
   nav_app_home() {
     const StartupApp = require("../../02/z2ui5_cl_app_startup");
     this._navTarget = new StartupApp();
     this._navTargetIsLeave = true;
   }
 
+  /** JS-only convenience — abap uses nav_app_leave() with an explicit app. */
   nav_app_back() {
     if (this._navStack.length > 0) {
       this._navTarget = this._navStack.pop();
@@ -595,11 +626,29 @@ class z2ui5_cl_core_client {
 
   // --- Utility ---
 
+  /**
+   * Returns the app instance bound to a draft id (or the current app when
+   * id is empty). Mirrors abap z2ui5_if_client~get_app.
+   *
+   * The id-form is async (DB lookup); the no-id form is sync — same dual
+   * behaviour ABAP gives via its synchronous DB call. Returns null on any
+   * lookup failure so callers can `await client.get_app(id)` defensively.
+   */
   get_app(id) {
-    if (id) {
-      // Loading by ID would require DB access - return null for now
-      return null;
-    }
+    if (!id) return this.oApp;
+    return (async () => {
+      try {
+        const z2ui5_cl_core_app = require("./z2ui5_cl_core_app");
+        const wrapper = await z2ui5_cl_core_app.db_load(id);
+        return wrapper?.mo_app || null;
+      } catch {
+        return null;
+      }
+    })();
+  }
+
+  /** Synchronous helper that returns the in-memory app — abap get_if_app(). */
+  get_if_app() {
     return this.oApp;
   }
 

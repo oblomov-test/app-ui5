@@ -92,6 +92,24 @@ class z2ui5_cl_xml_view_cc {
     return this._emit("Dirty", { isDirty: this.mo_view.boolean_abap_2_json(isdirty) });
   }
 
+  /**
+   * demo_output — JS port of abap2UI5 demo_output. Test/demo helper that
+   * scopes a `<style>` block from z2ui5_cl_cc_demo_out.get_style() and an
+   * `<HTML content="…">` block in one call. JS port emits a static minimal
+   * style scope; apps that need the full DemoOutput skin can override.
+   */
+  demo_output(val = ``) {
+    const v = this.mo_view;
+    v._generic({ ns: `html`, name: `style` });
+    return v._cc_plain_xml(z2ui5_cl_xml_view_cc._demo_output_style())
+            .HTML({ content: String(val ?? ``) });
+  }
+
+  static _demo_output_style() {
+    // Minimal "demo" wrapper styles — apps can replace via a custom CSS load.
+    return `.z2ui5DemoOut { padding: 1rem; border: 1px dashed #888; background:#fafafa; }`;
+  }
+
   favicon({ favicon } = {}) {
     return this._emit("Favicon", { favicon });
   }

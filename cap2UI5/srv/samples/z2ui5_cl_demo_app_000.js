@@ -1,6 +1,6 @@
-const z2ui5_if_app = require("../z2ui5/02/z2ui5_if_app");
-const z2ui5_cl_xml_view = require("../z2ui5/02/z2ui5_cl_xml_view");
-const z2ui5_cl_util = require("../z2ui5/00/03/z2ui5_cl_util");
+const z2ui5_if_app = require("abap2UI5/z2ui5_if_app");
+const z2ui5_cl_xml_view = require("abap2UI5/z2ui5_cl_xml_view");
+const z2ui5_cl_util = require("abap2UI5/z2ui5_cl_util");
 
 /**
  * z2ui5_cl_demo_app_000 — Sample Browser / Launchpad

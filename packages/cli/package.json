@@ -1,0 +1,37 @@
+{
+  "name": "create-cap2ui5-app",
+  "version": "0.0.0",
+  "description": "Scaffolds a new cap2UI5 application from a sample.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cap2UI5/dev.git",
+    "directory": "packages/cli"
+  },
+  "type": "module",
+  "bin": {
+    "create-cap2ui5-app": "bin/create-cap2ui5-app.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "node bin/create-cap2ui5-app.js",
+    "build": "echo 'no build step' && exit 0",
+    "test": "node --test src/*.test.js || exit 0",
+    "lint": "echo 'no linter configured' && exit 0"
+  },
+  "dependencies": {
+    "prompts": "^2.4.2",
+    "tiged": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

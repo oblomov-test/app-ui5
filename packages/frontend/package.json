@@ -1,0 +1,27 @@
+{
+  "name": "@cap2ui5/frontend",
+  "version": "0.0.0",
+  "description": "UI5 frontend library for cap2UI5 apps.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cap2UI5/dev.git",
+    "directory": "packages/frontend"
+  },
+  "homepage": "https://github.com/cap2UI5/frontend",
+  "main": "src/index.js",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "echo 'TODO: wire UI5 dev server'",
+    "build": "echo 'TODO: wire UI5 build'",
+    "test": "echo 'no tests yet' && exit 0",
+    "lint": "echo 'no linter configured' && exit 0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

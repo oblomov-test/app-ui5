@@ -1,10 +1,19 @@
 {
-  "name": "app-ui5",
-  "version": "0.0.0",
+  "name": "cap2ui5-dev",
   "private": true,
-  "description": "Mirror of the app/ folder from the abap2UI5 project.",
-  "license": "MIT",
+  "version": "0.0.0",
+  "description": "cap2UI5 development monorepo (source of truth).",
   "scripts": {
-    "clone": "./scripts/sync-app.sh"
+    "dev": "pnpm -r --parallel --filter \"./packages/*\" run dev",
+    "build": "pnpm -r --filter \"./packages/*\" run build",
+    "test": "pnpm -r --filter \"./packages/*\" run test",
+    "lint": "pnpm -r --filter \"./packages/*\" run lint"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
   }
 }

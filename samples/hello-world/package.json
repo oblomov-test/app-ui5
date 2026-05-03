@@ -1,0 +1,18 @@
+{
+  "name": "cap2ui5-hello-world",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minimal cap2UI5 sample app — frontend + backend, no DB.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "echo 'TODO: concurrently run frontend + backend' && exit 0",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@cap2ui5/frontend": "^0.0.0",
+    "@cap2ui5/backend": "^0.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

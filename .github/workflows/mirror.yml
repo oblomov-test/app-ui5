@@ -1,0 +1,56 @@
+name: mirror
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Ref to mirror from (branch, tag, or sha)"
+        required: false
+        default: "main"
+
+# Splits subtrees and force-pushes them to the public read-only mirrors.
+# Each mirror keeps history scoped to its own subtree, so users can browse
+# meaningful per-package commits rather than monorepo-wide noise.
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - subtree: packages/frontend
+            target_repo: cap2UI5/frontend
+          - subtree: packages/backend
+            target_repo: cap2UI5/backend
+          - subtree: samples
+            target_repo: cap2UI5/samples
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "cap2ui5-bot"
+          git config user.email "bot@cap2ui5.invalid"
+
+      - name: Split subtree
+        id: split
+        run: |
+          set -euo pipefail
+          SHA=$(git subtree split --prefix="${{ matrix.subtree }}" HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Split sha for ${{ matrix.subtree }}: $SHA"
+
+      - name: Push to mirror
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          git push --force \
+            "https://x-access-token:${MIRROR_TOKEN}@github.com/${{ matrix.target_repo }}.git" \
+            "${{ steps.split.outputs.sha }}:refs/heads/main"

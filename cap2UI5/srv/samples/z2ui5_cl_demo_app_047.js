@@ -1,0 +1,124 @@
+/* AUTO-GENERATED scaffolding — abap2UI5 transpile failed; manual port required.
+ *
+ * Original ABAP source:
+ * ====================
+ * CLASS z2ui5_cl_demo_app_047 DEFINITION PUBLIC.
+ * 
+ *   PUBLIC SECTION.
+ *     INTERFACES z2ui5_if_app.
+ * 
+ *     TYPES:
+ *       BEGIN OF ty_s_row,
+ *         date TYPE d,
+ *         time TYPE t,
+ *       END OF ty_s_row.
+ * 
+ *     DATA int1    TYPE i.
+ *     DATA int2    TYPE i.
+ *     DATA int_sum TYPE i.
+ * 
+ *     DATA dec1    TYPE p LENGTH 10 DECIMALS 4.
+ *     DATA dec2    TYPE p LENGTH 10 DECIMALS 4.
+ *     DATA dec_sum TYPE p LENGTH 10 DECIMALS 4.
+ * 
+ *     DATA date    TYPE d.
+ *     DATA time    TYPE t.
+ * 
+ *     DATA mt_tab TYPE STANDARD TABLE OF ty_s_row WITH EMPTY KEY.
+ *   PROTECTED SECTION.
+ *   PRIVATE SECTION.
+ * ENDCLASS.
+ * 
+ * 
+ * CLASS z2ui5_cl_demo_app_047 IMPLEMENTATION.
+ * 
+ *   METHOD z2ui5_if_app~main.
+ * 
+ *     IF client->check_on_init( ).
+ *       date = sy-datum.
+ *       time = sy-uzeit.
+ *       dec1 = - 1 / 3.
+ *       dec2 = 2 / 3.
+ * 
+ *       mt_tab = VALUE #( ( date = sy-datum time = sy-uzeit ) ).
+ *       client->_bind_edit( mt_tab ).
+ *     ENDIF.
+ * 
+ *     CASE client->get( )-event.
+ *       WHEN `BUTTON_INT`.
+ *         int_sum = int1 + int2.
+ *       WHEN `BUTTON_DEC`.
+ *         dec_sum = dec1 + dec2.
+ *     ENDCASE.
+ * 
+ *     DATA(page) = z2ui5_cl_xml_view=>factory( )->shell(
+ *         )->page(
+ *                 title          = `abap2UI5 - Integer and Decimals`
+ *                 navbuttonpress = client->_event_nav_app_leave( )
+ *                 shownavbutton  = client->check_app_prev_stack( ) ).
+ *     page->simple_form( title    = `Integer and Decimals`
+ *                        editable = abap_true
+ *              )->content( `form`
+ *                  )->title( `Input`
+ *                  )->label( `integer`
+ *                  )->input( client->_bind_edit( int1 )
+ *                  )->input( client->_bind_edit( int2 )
+ *                  )->input( enabled = abap_false
+ *                            value   = client->_bind_edit( int_sum )
+ *                  )->button( text  = `calc sum`
+ *                             press = client->_event( `BUTTON_INT` )
+ *                  )->label( `decimals`
+ *                  )->input( client->_bind_edit( dec1 )
+ *                  )->input( client->_bind_edit( dec2 )
+ *                  )->input( enabled = abap_false
+ *                            value   = client->_bind_edit( dec_sum )
+ *                  )->button( text  = `calc sum`
+ *                             press = client->_event( `BUTTON_DEC` )
+ *                  )->label( `date`
+ *                  )->input( client->_bind_edit( date )
+ *                  )->label( `time`
+ *                  )->input( client->_bind_edit( time ) ).
+ * 
+ *     DATA(tab) = page->scroll_container( height   = `70%`
+ *                                         vertical = abap_true
+ *         )->table(
+ *             growing             = abap_true
+ *             growingthreshold    = `20`
+ *             growingscrolltoload = abap_true
+ *             items               = client->_bind_edit( mt_tab )
+ *             sticky              = `ColumnHeaders,HeaderToolbar` ).
+ * 
+ *     tab->columns(
+ *         )->column(
+ *             )->text( `Date` )->get_parent(
+ *         )->column(
+ *             )->text( `Time` )->get_parent( ).
+ * 
+ *     tab->items( )->column_list_item( )->cells(
+ *        )->text( `{DATE}`
+ *        )->text( `{TIME}` ).
+ * 
+ *     client->view_display( page->stringify( ) ).
+ * 
+ *   ENDMETHOD.
+ * 
+ * ENDCLASS.
+ */
+
+const z2ui5_if_app = require("../z2ui5/02/z2ui5_if_app");
+const z2ui5_cl_xml_view = require("../z2ui5/02/z2ui5_cl_xml_view");
+
+class z2ui5_cl_demo_app_047 extends z2ui5_if_app {
+  client = null;
+  async main(client) {
+    this.client = client;
+    if (client.check_on_init()) {
+      const v = z2ui5_cl_xml_view.factory()
+        .Page({ title: "z2ui5_cl_demo_app_047 (TODO: port from abap)" })
+        .Text({ text: "This sample needs to be ported manually from abap2UI5." });
+      client.view_display(v.stringify());
+    }
+  }
+}
+
+module.exports = z2ui5_cl_demo_app_047;

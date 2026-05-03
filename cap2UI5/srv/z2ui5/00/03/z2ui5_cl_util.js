@@ -511,14 +511,9 @@ class z2ui5_cl_util {
     const isObjectContract = !isClassContract && Array.isArray(intf?.METHOD_NAMES);
     if (!isClassContract && !isObjectContract) return [];
 
-    const baseDirs = [
-      path.join(__dirname, "../../02"),
-      path.join(__dirname, "../../02/01"),
-      path.join(__dirname, "../../../samples"),
-    ];
     const results = [];
     const seen = new Set();
-    for (const dir of baseDirs) {
+    for (const dir of z2ui5_cl_util._app_dirs()) {
       if (!fs.existsSync(dir)) continue;
       for (const file of fs.readdirSync(dir)) {
         if (!file.endsWith(".js")) continue;
@@ -548,13 +543,57 @@ class z2ui5_cl_util {
     return false;  // we are not in ABAP, ever
   }
 
-  static _findClassFile(className) {
-    const searchPaths = [
-      path.join(__dirname, "../../02", `${className}.js`),
-      path.join(__dirname, "../../02/01", `${className}.js`),
-      path.join(__dirname, "../../../samples", `${className}.js`),
+  // ============================================================
+  //  App directory registry — replaces the formerly-hardcoded paths so
+  //  external sample repos can plug in without forking the framework.
+  //
+  //  Resolution order (first hit wins for rtti_get_class):
+  //    1. Built-ins shipped with the framework (02/, 02/01/)
+  //    2. Bundled samples folder (srv/samples/) — present iff this repo
+  //       carries them in-tree; gone after extraction to a separate repo.
+  //    3. Anything registered at runtime via register_app_dir()
+  //    4. Anything in the Z2UI5_APP_DIRS env var (colon-separated paths)
+  //
+  //  External samples-repo lifecycle:
+  //    require("abap2UI5/register-apps")(__dirname + "/samples");
+  //    // or:
+  //    Z2UI5_APP_DIRS=/abs/path/to/samples cds-serve
+  // ============================================================
+
+  static _registered_dirs = [];
+
+  /** Add a directory to the app-class search path. Idempotent. */
+  static register_app_dir(dir) {
+    const abs = path.resolve(dir);
+    if (!z2ui5_cl_util._registered_dirs.includes(abs)) {
+      z2ui5_cl_util._registered_dirs.push(abs);
+    }
+  }
+
+  /** Returns the full ordered list of directories searched for app classes. */
+  static _app_dirs() {
+    const out = [
+      // 1. Framework built-ins
+      path.join(__dirname, "../../02"),
+      path.join(__dirname, "../../02/01"),
+      // 2. Bundled samples (still in-tree); harmless if absent
+      path.join(__dirname, "../../../samples"),
+      // 3. Runtime-registered
+      ...z2ui5_cl_util._registered_dirs,
     ];
-    for (const p of searchPaths) {
+    // 4. Env var
+    const env = process.env.Z2UI5_APP_DIRS;
+    if (env) {
+      for (const p of env.split(path.delimiter)) {
+        if (p) out.push(path.resolve(p));
+      }
+    }
+    return out;
+  }
+
+  static _findClassFile(className) {
+    for (const dir of z2ui5_cl_util._app_dirs()) {
+      const p = path.join(dir, `${className}.js`);
       if (fs.existsSync(p)) return p;
     }
     return null;
